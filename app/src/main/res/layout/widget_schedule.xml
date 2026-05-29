@@ -52,11 +52,12 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <View
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="1dp"
         android:layout_marginTop="9dp"
-        android:background="@color/schedule_soft" />
+        android:background="@color/schedule_soft"
+        android:text="" />
 
     <TextView
         android:id="@+id/widgetMessage"
@@ -76,7 +77,8 @@
         android:layout_marginTop="8dp"
         android:background="@drawable/widget_lesson_bg"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/lessonNumber1"
@@ -124,7 +126,8 @@
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_lesson_bg"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/lessonNumber2"
@@ -172,7 +175,8 @@
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_lesson_bg"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/lessonNumber3"
@@ -220,7 +224,8 @@
         android:layout_marginTop="4dp"
         android:background="@drawable/widget_lesson_bg"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:visibility="gone">
 
         <TextView
             android:id="@+id/lessonNumber4"
