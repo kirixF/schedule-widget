@@ -1,0 +1,9 @@
+<resources>
+    <color name="schedule_bg">#F6F7FB</color>
+    <color name="schedule_panel">#FFFFFF</color>
+    <color name="schedule_text">#101828</color>
+    <color name="schedule_muted">#667085</color>
+    <color name="schedule_soft">#EAECF0</color>
+    <color name="schedule_accent">#1D4ED8</color>
+    <color name="schedule_accent_soft">#EAF1FF</color>
+</resources>

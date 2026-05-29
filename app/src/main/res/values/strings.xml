@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">Расписание</string>
+    <string name="widget_name">Расписание на сегодня</string>
+    <string name="app_subtitle">Автоматическое расписание на сегодня для виджета.</string>
+    <string name="section_group">Группа</string>
+    <string name="section_group_hint">Введите группу так же, как на сайте колледжа. Например: П-210.</string>
+    <string name="group_hint">П-210</string>
+    <string name="save_refresh">Сохранить и обновить</string>
+    <string name="section_widget">Виджет</string>
+    <string name="section_widget_hint">После сохранения добавьте виджет на главный экран. Он будет обновляться в фоне.</string>
+    <string name="pin_widget">Добавить виджет</string>
+    <string name="section_status">Состояние</string>
+    <string name="status_no_group">Группа пока не выбрана. Введите группу и нажмите «Сохранить и обновить».</string>
+    <string name="status_enter_group">Введите группу, например П-210.</string>
+    <string name="status_saved">Группа сохранена. Обновляю расписание для виджета.</string>
+    <string name="status_selected_group">Выбрана группа: %1$s</string>
+    <string name="status_no_data">Последних данных еще нет.</string>
+    <string name="status_last_error">Последняя ошибка:</string>
+    <string name="status_last_update_error">Последняя ошибка обновления:</string>
+    <string name="widget_setup_title">Расписание</string>
+    <string name="widget_setup_subtitle">Группа не выбрана</string>
+    <string name="widget_setup_body">Откройте приложение и укажите группу.</string>
+    <string name="widget_loading_subtitle">Обновление</string>
+    <string name="widget_loading_body">Загружаю расписание...</string>
+    <string name="widget_error_subtitle">Ошибка обновления</string>
+    <string name="widget_last_data_error">Последние данные · ошибка обновления</string>
+</resources>
