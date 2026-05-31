@@ -27,6 +27,8 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="com.kirix.schedule.ACTION_REFRESH" />
+                <action android:name="com.kirix.schedule.ACTION_SELECT_DAY" />
+                <action android:name="com.kirix.schedule.ACTION_SHIFT_WEEK" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

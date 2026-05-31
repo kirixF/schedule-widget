@@ -14,52 +14,127 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 final class ScheduleApiClient {
     private static final String BASE_URL = "https://rasp.ural-campus.ru/api";
     private static final String ORG = "college";
     private static final DateTimeFormatter API_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT);
+    private static final DateTimeFormatter RESPONSE_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT);
+    private static final Locale RU = Locale.forLanguageTag("ru");
 
     private ScheduleApiClient() {
     }
 
     static Result fetchToday(String groupQuery) throws IOException, JSONException {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        ArchiveResult result = fetchRange(groupQuery, today, today, false);
+        ScheduleData todaySchedule = result.archive.getDay(today);
+        if (todaySchedule == null) {
+            todaySchedule = ScheduleData.empty(
+                    result.archive.group,
+                    today,
+                    dayName(today),
+                    result.archive.updatedAtMillis
+            );
+        }
+        return new Result(todaySchedule, todaySchedule.toJsonObject().toString());
+    }
+
+    static ArchiveResult fetchAll(String groupQuery) throws IOException, JSONException {
+        LocalDate today = LocalDate.now(ZoneId.systemDefault());
+        return fetchRange(groupQuery, today.minusDays(7), today.plusYears(1), true);
+    }
+
+    private static ArchiveResult fetchRange(
+            String groupQuery,
+            LocalDate dateBegin,
+            LocalDate requestDateEnd,
+            boolean stopAtLastPublishedDay
+    ) throws IOException, JSONException {
         String query = groupQuery == null ? "" : groupQuery.trim();
         if (query.isEmpty()) {
             throw new IOException("Группа не указана");
         }
 
         Group group = findGroup(query);
-        LocalDate today = LocalDate.now(ZoneId.systemDefault());
-        String date = API_DATE.format(today);
         String url = BASE_URL + "/schedule/" + ORG + "/group/" + group.guid
-                + "?datebegin=" + date + "&dateend=" + date;
+                + "?datebegin=" + API_DATE.format(dateBegin)
+                + "&dateend=" + API_DATE.format(requestDateEnd);
 
         JSONObject root = new JSONObject(get(url));
         JSONArray schedule = extractArray(root, "schedule");
-        JSONArray lessons = new JSONArray();
-        String dayName = today.getDayOfWeek().toString();
-        if (schedule.length() > 0) {
-            JSONObject day = schedule.getJSONObject(0);
-            dayName = day.optString("day", day.optString("date", dayName));
+        long updatedAt = System.currentTimeMillis();
+        LocalDate cachedThrough = stopAtLastPublishedDay
+                ? LocalDate.now(ZoneId.systemDefault())
+                : requestDateEnd;
+        Map<String, ScheduleData> days = new TreeMap<>();
+
+        for (int i = 0; i < schedule.length(); i++) {
+            JSONObject day = schedule.getJSONObject(i);
+            LocalDate date = parseResponseDate(day.optString("date"));
+            if (date == null) {
+                continue;
+            }
+            if (date.isAfter(cachedThrough)) {
+                cachedThrough = date;
+            }
+
+            JSONArray lessons = new JSONArray();
             JSONArray rawLessons = day.optJSONArray("lessons");
             if (rawLessons != null) {
-                for (int i = 0; i < rawLessons.length(); i++) {
-                    JSONObject raw = rawLessons.getJSONObject(i);
-                    lessons.put(mapLesson(raw, i));
+                for (int lessonIndex = 0; lessonIndex < rawLessons.length(); lessonIndex++) {
+                    lessons.put(mapLesson(rawLessons.getJSONObject(lessonIndex), lessonIndex));
                 }
+            }
+            days.put(date.toString(), toScheduleData(group.name, date, day.optString("day"), lessons, updatedAt));
+        }
+
+        if (cachedThrough.isBefore(dateBegin)) {
+            cachedThrough = dateBegin;
+        }
+        for (LocalDate date = dateBegin; !date.isAfter(cachedThrough); date = date.plusDays(1)) {
+            if (!days.containsKey(date.toString())) {
+                days.put(date.toString(), ScheduleData.empty(group.name, date, dayName(date), updatedAt));
             }
         }
 
+        ScheduleArchive archive = new ScheduleArchive(group.name, dateBegin, cachedThrough, updatedAt, days);
+        return new ArchiveResult(archive);
+    }
+
+    private static ScheduleData toScheduleData(
+            String group,
+            LocalDate date,
+            String rawDayName,
+            JSONArray lessons,
+            long updatedAt
+    ) throws JSONException {
         JSONObject result = new JSONObject();
-        result.put("group", group.name);
-        result.put("dayName", dayName);
+        result.put("group", group);
+        result.put("dateKey", date.toString());
+        result.put("dayName", rawDayName.trim().isEmpty() ? dayName(date) : rawDayName);
         result.put("lessons", lessons);
-        result.put("updatedAtMillis", System.currentTimeMillis());
-        return new Result(ScheduleData.fromJson(result.toString()), result.toString());
+        result.put("updatedAtMillis", updatedAt);
+        return ScheduleData.fromJsonObject(result);
+    }
+
+    private static LocalDate parseResponseDate(String rawDate) {
+        try {
+            return LocalDate.parse(rawDate, RESPONSE_DATE);
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
+    }
+
+    private static String dayName(LocalDate date) {
+        return date.getDayOfWeek().getDisplayName(TextStyle.FULL, RU);
     }
 
     private static Group findGroup(String query) throws IOException, JSONException {
@@ -153,7 +228,7 @@ final class ScheduleApiClient {
         connection.setConnectTimeout(15_000);
         connection.setReadTimeout(20_000);
         connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("User-Agent", "ScheduleWidget/1.0 Android");
+        connection.setRequestProperty("User-Agent", "ScheduleWidget/2.0 Android");
 
         int status = connection.getResponseCode();
         InputStream stream = status >= 200 && status < 300
@@ -186,10 +261,10 @@ final class ScheduleApiClient {
         return value == null
                 ? ""
                 : value.trim()
-                .toLowerCase(Locale.forLanguageTag("ru"))
-                .replace('ё', 'е')
-                .replace('–', '-')
-                .replace('—', '-')
+                .toLowerCase(RU)
+                .replace('\u0451', '\u0435')
+                .replace('\u2013', '-')
+                .replace('\u2014', '-')
                 .replace(" ", "");
     }
 
@@ -198,8 +273,9 @@ final class ScheduleApiClient {
             return "";
         }
         String clean = value.trim();
+        int firstColon = clean.indexOf(':');
         int lastColon = clean.lastIndexOf(':');
-        if (lastColon > 1 && clean.length() - lastColon == 3) {
+        if (firstColon != lastColon && lastColon > 1 && clean.length() - lastColon == 3) {
             return clean.substring(0, lastColon);
         }
         return clean;
@@ -226,6 +302,14 @@ final class ScheduleApiClient {
         Result(ScheduleData data, String rawJson) {
             this.data = data;
             this.rawJson = rawJson;
+        }
+    }
+
+    static final class ArchiveResult {
+        final ScheduleArchive archive;
+
+        ArchiveResult(ScheduleArchive archive) {
+            this.archive = archive;
         }
     }
 

@@ -6,17 +6,37 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.time.format.TextStyle;
+import java.time.temporal.TemporalAdjusters;
 import java.util.Locale;
 
 public final class ScheduleWidgetProvider extends AppWidgetProvider {
     static final String ACTION_REFRESH = "com.kirix.schedule.ACTION_REFRESH";
+    static final String ACTION_SELECT_DAY = "com.kirix.schedule.ACTION_SELECT_DAY";
+    static final String ACTION_SHIFT_WEEK = "com.kirix.schedule.ACTION_SHIFT_WEEK";
+    private static final String EXTRA_DATE = "date";
+    private static final String EXTRA_WEEK_OFFSET = "week_offset";
     private static final Locale RU = Locale.forLanguageTag("ru");
+    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("dd.MM", RU);
     private static final int MAX_LESSONS = 4;
+    private static final int DEFAULT_WIDGET_HEIGHT_DP = 220;
+    private static final int[] DAY_CELL_IDS = {
+            R.id.dayCell1,
+            R.id.dayCell2,
+            R.id.dayCell3,
+            R.id.dayCell4,
+            R.id.dayCell5,
+            R.id.dayCell6,
+            R.id.dayCell7
+    };
     private static final int[] ROW_IDS = {
             R.id.lessonRow1,
             R.id.lessonRow2,
@@ -60,26 +80,44 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        ScheduleData last = SchedulePrefs.getLastSchedule(context);
-        if (last != null) {
-            showSchedule(context, last);
-        } else {
-            showLoading(context);
-        }
+        showSelectedSchedule(context);
         ScheduleUpdateJobService.scheduleNow(context);
-        ScheduleUpdateJobService.schedulePeriodic(context);
+        ScheduleUpdateJobService.scheduleDailyAtOne(context);
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(
+            Context context,
+            AppWidgetManager appWidgetManager,
+            int appWidgetId,
+            Bundle newOptions
+    ) {
+        showSelectedSchedule(context);
     }
 
     @Override
     public void onReceive(Context context, Intent intent) {
         super.onReceive(context, intent);
         String action = intent == null ? "" : intent.getAction();
-        if (ACTION_REFRESH.equals(action)) {
-            showLoading(context);
+        if (ACTION_SELECT_DAY.equals(action)) {
+            SchedulePrefs.setWidgetSelectedDate(
+                    context,
+                    parseDate(intent.getStringExtra(EXTRA_DATE), SchedulePrefs.getWidgetSelectedDate(context))
+            );
+            showSelectedSchedule(context);
+        } else if (ACTION_SHIFT_WEEK.equals(action)) {
+            LocalDate selectedDate = SchedulePrefs.getWidgetSelectedDate(context);
+            SchedulePrefs.setWidgetSelectedDate(
+                    context,
+                    selectedDate.plusWeeks(intent.getIntExtra(EXTRA_WEEK_OFFSET, 0))
+            );
+            showSelectedSchedule(context);
+        } else if (ACTION_REFRESH.equals(action)) {
+            showSelectedSchedule(context);
             ScheduleUpdateJobService.scheduleNow(context);
         } else if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
-            ScheduleUpdateJobService.schedulePeriodic(context);
+            ScheduleUpdateJobService.scheduleDailyAtOne(context);
         }
     }
 
@@ -94,9 +132,10 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
 
     static void showLoading(Context context) {
         String group = SchedulePrefs.getGroup(context);
+        LocalDate selectedDate = SchedulePrefs.getWidgetSelectedDate(context);
         String title = group.trim().isEmpty()
                 ? context.getString(R.string.app_name)
-                : "Сегодня · " + group.toUpperCase(RU);
+                : widgetTitle(context, group, selectedDate);
         updateMessage(
                 context,
                 title,
@@ -109,8 +148,25 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         updateSchedule(context, data, scheduleSubtitle(data));
     }
 
+    static void showSelectedSchedule(Context context) {
+        LocalDate selectedDate = SchedulePrefs.getWidgetSelectedDate(context);
+        ScheduleData selectedSchedule = ScheduleArchiveStore.getSchedule(context, selectedDate);
+        if (selectedSchedule != null) {
+            showSchedule(context, selectedSchedule);
+            return;
+        }
+
+        String group = SchedulePrefs.getGroup(context);
+        updateMessage(
+                context,
+                widgetTitle(context, group, selectedDate),
+                SHORT_DATE.format(selectedDate),
+                context.getString(R.string.widget_no_day_data)
+        );
+    }
+
     static void showError(Context context, String error) {
-        ScheduleData last = SchedulePrefs.getLastSchedule(context);
+        ScheduleData last = ScheduleArchiveStore.getSchedule(context, SchedulePrefs.getWidgetSelectedDate(context));
         if (last != null) {
             updateSchedule(
                     context,
@@ -128,22 +184,35 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     private static void updateMessage(Context context, String title, String subtitle, String body) {
-        RemoteViews views = createViews(context, title, subtitle);
-        views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
-        views.setTextViewText(R.id.widgetMessage, body);
-        clearLessons(views);
-        updateWidgets(context, views);
+        updateWidgets(context, appWidgetId -> {
+            RemoteViews views = createViews(context, title, subtitle);
+            views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
+            views.setTextViewText(R.id.widgetMessage, body);
+            clearLessons(views);
+            return views;
+        });
     }
 
     private static void updateSchedule(Context context, ScheduleData data, String subtitle) {
-        RemoteViews views = createViews(context, data.widgetTitle(), subtitle);
-        int visibleCount = Math.min(data.lessons.size(), MAX_LESSONS);
+        updateWidgets(
+                context,
+                appWidgetId -> createScheduleViews(context, data, subtitle, visibleLessonLimit(context, appWidgetId))
+        );
+    }
+
+    private static RemoteViews createScheduleViews(
+            Context context,
+            ScheduleData data,
+            String subtitle,
+            int lessonLimit
+    ) {
+        RemoteViews views = createViews(context, widgetTitle(context, data.group, parseDate(data.dateKey, LocalDate.now())), subtitle);
+        int visibleCount = Math.min(data.lessons.size(), lessonLimit);
         if (visibleCount == 0) {
             views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
-            views.setTextViewText(R.id.widgetMessage, "Занятий нет");
+            views.setTextViewText(R.id.widgetMessage, context.getString(R.string.widget_no_lessons));
             clearLessons(views);
-            updateWidgets(context, views);
-            return;
+            return views;
         }
 
         views.setViewVisibility(R.id.widgetMessage, View.GONE);
@@ -157,7 +226,7 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         for (int i = 0; i < DIVIDER_IDS.length; i++) {
             views.setViewVisibility(DIVIDER_IDS[i], i < visibleCount - 1 ? View.VISIBLE : View.GONE);
         }
-        updateWidgets(context, views);
+        return views;
     }
 
     private static RemoteViews createViews(Context context, String title, String subtitle) {
@@ -165,10 +234,11 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widgetTitle, title);
         views.setTextViewText(R.id.widgetSubtitle, subtitle);
         views.setOnClickPendingIntent(R.id.widgetRoot, openAppIntent(context));
+        bindDayStrip(context, views);
         return views;
     }
 
-    private static void updateWidgets(Context context, RemoteViews views) {
+    private static void updateWidgets(Context context, WidgetViewsFactory factory) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         ComponentName component = new ComponentName(context, ScheduleWidgetProvider.class);
         int[] ids = manager.getAppWidgetIds(component);
@@ -176,7 +246,33 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        manager.updateAppWidget(ids, views);
+        for (int id : ids) {
+            manager.updateAppWidget(id, factory.create(id));
+        }
+    }
+
+    private static int visibleLessonLimit(Context context, int appWidgetId) {
+        Bundle options = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId);
+        int minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP);
+        int maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight);
+        int height = Math.max(minHeight, maxHeight);
+        if (height <= 0) {
+            height = DEFAULT_WIDGET_HEIGHT_DP;
+        }
+        if (height < 155) {
+            return 1;
+        }
+        if (height < 188) {
+            return 2;
+        }
+        if (height < 220) {
+            return 3;
+        }
+        return MAX_LESSONS;
+    }
+
+    private interface WidgetViewsFactory {
+        RemoteViews create(int appWidgetId);
     }
 
     private static void bindLesson(RemoteViews views, int index, ScheduleData.Lesson lesson) {
@@ -205,7 +301,7 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     private static String scheduleSubtitle(ScheduleData data) {
-        return dayLabel(data) + " · " + formatDate(data.updatedAtMillis) + " · " + lessonCountLabel(data);
+        return dayLabel(data) + " · " + formatScheduleDate(data) + " · " + lessonCountLabel(data);
     }
 
     private static String dayLabel(ScheduleData data) {
@@ -234,8 +330,9 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         if (raw.contains("вос") || raw.contains("sunday")) {
             return "ВС";
         }
-        return new SimpleDateFormat("EE", RU)
-                .format(new Date(data.updatedAtMillis))
+        LocalDate date = parseDate(data.dateKey, LocalDate.now());
+        return date.getDayOfWeek()
+                .getDisplayName(TextStyle.SHORT, RU)
                 .toUpperCase(RU)
                 .replace(".", "");
     }
@@ -285,8 +382,63 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         return "ауд. " + clean;
     }
 
-    private static String formatDate(long millis) {
-        return new SimpleDateFormat("dd.MM", RU).format(new Date(millis));
+    private static String formatScheduleDate(ScheduleData data) {
+        return SHORT_DATE.format(parseDate(data.dateKey, LocalDate.now()));
+    }
+
+    private static void bindDayStrip(Context context, RemoteViews views) {
+        LocalDate selectedDate = SchedulePrefs.getWidgetSelectedDate(context);
+        LocalDate today = LocalDate.now();
+        LocalDate weekStart = selectedDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        int mutedColor = context.getColor(R.color.schedule_muted);
+        int accentColor = context.getColor(R.color.schedule_accent);
+        int selectedColor = context.getColor(android.R.color.white);
+
+        for (int i = 0; i < DAY_CELL_IDS.length; i++) {
+            int viewId = DAY_CELL_IDS[i];
+            LocalDate date = weekStart.plusDays(i);
+            boolean selected = date.equals(selectedDate);
+            boolean isToday = date.equals(today);
+            int background = selected
+                    ? R.drawable.widget_day_selected_bg
+                    : isToday ? R.drawable.widget_day_today_bg : R.drawable.widget_day_bg;
+            int color = selected ? selectedColor : isToday ? accentColor : mutedColor;
+
+            views.setTextViewText(viewId, dayCellLabel(date));
+            views.setTextColor(viewId, color);
+            views.setInt(viewId, "setBackgroundResource", background);
+            views.setOnClickPendingIntent(viewId, selectDayIntent(context, date, i));
+        }
+
+        views.setOnClickPendingIntent(R.id.previousWeekButton, shiftWeekIntent(context, -1));
+        views.setOnClickPendingIntent(R.id.nextWeekButton, shiftWeekIntent(context, 1));
+    }
+
+    private static String dayCellLabel(LocalDate date) {
+        return date.getDayOfWeek()
+                .getDisplayName(TextStyle.SHORT, RU)
+                .toUpperCase(RU)
+                .replace(".", "")
+                + "\n"
+                + date.getDayOfMonth();
+    }
+
+    private static String widgetTitle(Context context, String group, LocalDate date) {
+        String day = date.equals(LocalDate.now())
+                ? context.getString(R.string.widget_today)
+                : SHORT_DATE.format(date);
+        String normalizedGroup = clean(group).isEmpty()
+                ? context.getString(R.string.widget_group)
+                : group.toUpperCase(RU);
+        return day + " · " + normalizedGroup;
+    }
+
+    private static LocalDate parseDate(String rawDate, LocalDate fallback) {
+        try {
+            return LocalDate.parse(rawDate);
+        } catch (DateTimeParseException ignored) {
+            return fallback;
+        }
     }
 
     private static String clean(String value) {
@@ -298,6 +450,30 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         return PendingIntent.getActivity(
                 context,
                 0,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private static PendingIntent selectDayIntent(Context context, LocalDate date, int index) {
+        Intent intent = new Intent(context, ScheduleWidgetProvider.class)
+                .setAction(ACTION_SELECT_DAY)
+                .putExtra(EXTRA_DATE, date.toString());
+        return PendingIntent.getBroadcast(
+                context,
+                100 + index,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+    }
+
+    private static PendingIntent shiftWeekIntent(Context context, int weeks) {
+        Intent intent = new Intent(context, ScheduleWidgetProvider.class)
+                .setAction(ACTION_SHIFT_WEEK)
+                .putExtra(EXTRA_WEEK_OFFSET, weeks);
+        return PendingIntent.getBroadcast(
+                context,
+                weeks < 0 ? 201 : 202,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
