@@ -273,8 +273,9 @@ final class ScheduleApiClient {
             return "";
         }
         String clean = value.trim();
+        int firstColon = clean.indexOf(':');
         int lastColon = clean.lastIndexOf(':');
-        if (lastColon > 1 && clean.length() - lastColon == 3) {
+        if (firstColon != lastColon && lastColon > 1 && clean.length() - lastColon == 3) {
             return clean.substring(0, lastColon);
         }
         return clean;

@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Bundle;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -26,6 +27,7 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
     private static final Locale RU = Locale.forLanguageTag("ru");
     private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("dd.MM", RU);
     private static final int MAX_LESSONS = 4;
+    private static final int DEFAULT_WIDGET_HEIGHT_DP = 220;
     private static final int[] DAY_CELL_IDS = {
             R.id.dayCell1,
             R.id.dayCell2,
@@ -81,6 +83,16 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         showSelectedSchedule(context);
         ScheduleUpdateJobService.scheduleNow(context);
         ScheduleUpdateJobService.scheduleDailyAtOne(context);
+    }
+
+    @Override
+    public void onAppWidgetOptionsChanged(
+            Context context,
+            AppWidgetManager appWidgetManager,
+            int appWidgetId,
+            Bundle newOptions
+    ) {
+        showSelectedSchedule(context);
     }
 
     @Override
@@ -172,22 +184,35 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
     }
 
     private static void updateMessage(Context context, String title, String subtitle, String body) {
-        RemoteViews views = createViews(context, title, subtitle);
-        views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
-        views.setTextViewText(R.id.widgetMessage, body);
-        clearLessons(views);
-        updateWidgets(context, views);
+        updateWidgets(context, appWidgetId -> {
+            RemoteViews views = createViews(context, title, subtitle);
+            views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
+            views.setTextViewText(R.id.widgetMessage, body);
+            clearLessons(views);
+            return views;
+        });
     }
 
     private static void updateSchedule(Context context, ScheduleData data, String subtitle) {
+        updateWidgets(
+                context,
+                appWidgetId -> createScheduleViews(context, data, subtitle, visibleLessonLimit(context, appWidgetId))
+        );
+    }
+
+    private static RemoteViews createScheduleViews(
+            Context context,
+            ScheduleData data,
+            String subtitle,
+            int lessonLimit
+    ) {
         RemoteViews views = createViews(context, widgetTitle(context, data.group, parseDate(data.dateKey, LocalDate.now())), subtitle);
-        int visibleCount = Math.min(data.lessons.size(), MAX_LESSONS);
+        int visibleCount = Math.min(data.lessons.size(), lessonLimit);
         if (visibleCount == 0) {
             views.setViewVisibility(R.id.widgetMessage, View.VISIBLE);
             views.setTextViewText(R.id.widgetMessage, context.getString(R.string.widget_no_lessons));
             clearLessons(views);
-            updateWidgets(context, views);
-            return;
+            return views;
         }
 
         views.setViewVisibility(R.id.widgetMessage, View.GONE);
@@ -201,7 +226,7 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         for (int i = 0; i < DIVIDER_IDS.length; i++) {
             views.setViewVisibility(DIVIDER_IDS[i], i < visibleCount - 1 ? View.VISIBLE : View.GONE);
         }
-        updateWidgets(context, views);
+        return views;
     }
 
     private static RemoteViews createViews(Context context, String title, String subtitle) {
@@ -213,7 +238,7 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         return views;
     }
 
-    private static void updateWidgets(Context context, RemoteViews views) {
+    private static void updateWidgets(Context context, WidgetViewsFactory factory) {
         AppWidgetManager manager = AppWidgetManager.getInstance(context);
         ComponentName component = new ComponentName(context, ScheduleWidgetProvider.class);
         int[] ids = manager.getAppWidgetIds(component);
@@ -221,7 +246,28 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
             return;
         }
 
-        manager.updateAppWidget(ids, views);
+        for (int id : ids) {
+            manager.updateAppWidget(id, factory.create(id));
+        }
+    }
+
+    private static int visibleLessonLimit(Context context, int appWidgetId) {
+        Bundle options = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId);
+        int height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP);
+        if (height < 155) {
+            return 1;
+        }
+        if (height < 188) {
+            return 2;
+        }
+        if (height < 220) {
+            return 3;
+        }
+        return MAX_LESSONS;
+    }
+
+    private interface WidgetViewsFactory {
+        RemoteViews create(int appWidgetId);
     }
 
     private static void bindLesson(RemoteViews views, int index, ScheduleData.Lesson lesson) {
