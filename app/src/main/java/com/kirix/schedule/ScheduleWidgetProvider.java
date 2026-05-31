@@ -253,7 +253,12 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
 
     private static int visibleLessonLimit(Context context, int appWidgetId) {
         Bundle options = AppWidgetManager.getInstance(context).getAppWidgetOptions(appWidgetId);
-        int height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP);
+        int minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, DEFAULT_WIDGET_HEIGHT_DP);
+        int maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight);
+        int height = Math.max(minHeight, maxHeight);
+        if (height <= 0) {
+            height = DEFAULT_WIDGET_HEIGHT_DP;
+        }
         if (height < 155) {
             return 1;
         }
