@@ -1,6 +1,7 @@
 package com.kirix.schedule;
 
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
@@ -12,9 +13,19 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 
+import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Date;
+import java.util.Locale;
+
 public final class MainActivity extends Activity {
+    private static final Locale RU = Locale.forLanguageTag("ru");
+    private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", RU);
     private EditText groupInput;
     private TextView statusText;
+    private Button dayPickerButton;
+    private LocalDate selectedDate = LocalDate.now();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,6 +36,8 @@ public final class MainActivity extends Activity {
         statusText = findViewById(R.id.statusText);
         Button saveButton = findViewById(R.id.saveButton);
         Button pinWidgetButton = findViewById(R.id.pinWidgetButton);
+        dayPickerButton = findViewById(R.id.dayPickerButton);
+        selectedDate = SchedulePrefs.getSelectedDate(this);
 
         groupInput.setText(SchedulePrefs.getGroup(this));
         groupInput.setOnEditorActionListener((view, actionId, event) -> {
@@ -36,6 +49,7 @@ public final class MainActivity extends Activity {
         });
 
         saveButton.setOnClickListener(view -> saveAndRefresh());
+        setupDayPickerButton();
         setupPinWidgetButton(pinWidgetButton);
         renderStatus();
     }
@@ -56,9 +70,32 @@ public final class MainActivity extends Activity {
 
         SchedulePrefs.setGroup(this, group);
         ScheduleWidgetProvider.showLoading(this);
-        ScheduleUpdateJobService.schedulePeriodic(this);
+        ScheduleUpdateJobService.scheduleDailyAtOne(this);
         ScheduleUpdateJobService.scheduleNow(this);
         statusText.setText(getString(R.string.status_saved));
+    }
+
+    private void setupDayPickerButton() {
+        updateDayPickerLabel();
+        dayPickerButton.setOnClickListener(view -> {
+            DatePickerDialog dialog = new DatePickerDialog(
+                    this,
+                    (picker, year, month, dayOfMonth) -> {
+                        selectedDate = LocalDate.of(year, month + 1, dayOfMonth);
+                        SchedulePrefs.setSelectedDate(this, selectedDate);
+                        updateDayPickerLabel();
+                        renderStatus();
+                    },
+                    selectedDate.getYear(),
+                    selectedDate.getMonthValue() - 1,
+                    selectedDate.getDayOfMonth()
+            );
+            dialog.show();
+        });
+    }
+
+    private void updateDayPickerLabel() {
+        dayPickerButton.setText(DAY_FORMAT.format(selectedDate));
     }
 
     private void setupPinWidgetButton(Button button) {
@@ -83,7 +120,8 @@ public final class MainActivity extends Activity {
 
     private void renderStatus() {
         String group = SchedulePrefs.getGroup(this);
-        ScheduleData last = SchedulePrefs.getLastSchedule(this);
+        ScheduleArchive archive = ScheduleArchiveStore.loadForCurrentGroup(this);
+        ScheduleData selectedSchedule = archive == null ? null : archive.getDay(selectedDate);
         String lastError = SchedulePrefs.getLastError(this);
 
         if (group.trim().isEmpty()) {
@@ -92,16 +130,23 @@ public final class MainActivity extends Activity {
         }
 
         StringBuilder text = new StringBuilder(getString(R.string.status_selected_group, group));
-        if (last == null) {
-            text.append('\n').append(getString(R.string.status_no_data));
+        text.append('\n').append(getString(R.string.status_selected_day, DAY_FORMAT.format(selectedDate)));
+        if (archive != null) {
+            text.append('\n').append(getString(
+                    R.string.status_cache_summary,
+                    archive.getCachedDayCount(),
+                    formatTime(archive.updatedAtMillis)
+            ));
+        }
+
+        if (selectedSchedule == null) {
+            text.append("\n\n").append(getString(R.string.status_no_day_data));
             appendError(text, lastError, getString(R.string.status_last_error));
             statusText.setText(text.toString());
             return;
         }
 
-        text.append('\n').append(last.widgetSubtitle())
-                .append("\n\n")
-                .append(last.widgetBody());
+        text.append("\n\n").append(selectedSchedule.widgetBody());
         appendError(text, lastError, getString(R.string.status_last_update_error));
         statusText.setText(text.toString());
     }
@@ -113,5 +158,9 @@ public final class MainActivity extends Activity {
                     .append('\n')
                     .append(lastError.trim());
         }
+    }
+
+    private String formatTime(long millis) {
+        return new SimpleDateFormat("dd.MM.yyyy HH:mm", RU).format(new Date(millis));
     }
 }

@@ -1,20 +1,22 @@
 <resources>
     <string name="app_name">Расписание</string>
-    <string name="widget_name">Расписание на сегодня</string>
-    <string name="app_subtitle">Автоматическое расписание на сегодня для виджета.</string>
+    <string name="widget_name">Расписание с выбором дня</string>
+    <string name="app_subtitle">Расписание с ежедневным обновлением в 01:00 и офлайн-архивом.</string>
     <string name="section_group">Группа</string>
     <string name="section_group_hint">Введите группу так же, как на сайте колледжа. Например: П-210.</string>
     <string name="group_hint">П-210</string>
+    <string name="step_1" translatable="false">1</string>
+    <string name="step_2" translatable="false">2</string>
+    <string name="step_3" translatable="false">3</string>
     <string name="save_refresh">Сохранить и обновить</string>
     <string name="section_widget">Виджет</string>
-    <string name="section_widget_hint">После сохранения добавьте виджет на главный экран. Он будет обновляться в фоне.</string>
+    <string name="section_widget_hint">После сохранения добавьте виджет на главный экран. В виджете можно выбирать дни и листать недели. Архив обновляется ежедневно около 01:00.</string>
     <string name="pin_widget">Добавить виджет</string>
     <string name="section_status">Состояние</string>
     <string name="status_no_group">Группа пока не выбрана. Введите группу и нажмите «Сохранить и обновить».</string>
     <string name="status_enter_group">Введите группу, например П-210.</string>
-    <string name="status_saved">Группа сохранена. Обновляю расписание для виджета.</string>
+    <string name="status_saved">Группа сохранена. Загружаю полное расписание для офлайн-доступа.</string>
     <string name="status_selected_group">Выбрана группа: %1$s</string>
-    <string name="status_no_data">Последних данных еще нет.</string>
     <string name="status_last_error">Последняя ошибка:</string>
     <string name="status_last_update_error">Последняя ошибка обновления:</string>
     <string name="widget_setup_title">Расписание</string>
@@ -24,4 +26,16 @@
     <string name="widget_loading_body">Загружаю расписание...</string>
     <string name="widget_error_subtitle">Ошибка обновления</string>
     <string name="widget_last_data_error">Последние данные · ошибка обновления</string>
+    <string name="widget_no_day_data">Для этого дня нет сохраненных данных.</string>
+    <string name="widget_no_lessons">Занятий нет</string>
+    <string name="widget_today">Сегодня</string>
+    <string name="widget_group">группа</string>
+    <string name="widget_previous_week" translatable="false">&#8249;</string>
+    <string name="widget_next_week" translatable="false">&#8250;</string>
+    <string name="section_day">День расписания</string>
+    <string name="section_day_hint">Выберите дату. Сохраненные дни открываются без интернета.</string>
+    <string name="select_day">Выбрать день</string>
+    <string name="status_selected_day">День: %1$s</string>
+    <string name="status_cache_summary">Сохранено локально: %1$d дней · обновлено %2$s</string>
+    <string name="status_no_day_data">Для выбранного дня локальных данных нет. Подключитесь к интернету и обновите расписание.</string>
 </resources>
