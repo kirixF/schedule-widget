@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -86,7 +87,15 @@ final class GismeteoApiClient {
 
     // Блокирующий вызов для фоновых задач (JobService). Страница "сейчас" не критична.
     static GismeteoWeatherData fetchForecastSync(Context context) throws IOException {
-        return fetchForecastSync(SchedulePrefs.getCitySlug(context));
+        GismeteoWeatherData data = fetchForecastSync(SchedulePrefs.getCitySlug(context));
+        try {
+            GismeteoWeatherData prev = SchedulePrefs.getLastForecast(context);
+            if (prev != null) {
+                data = data.mergePrevious(prev);
+            }
+        } catch (Exception ignored) {
+        }
+        return data;
     }
 
     static GismeteoWeatherData fetchForecastSync(String citySlug) throws IOException {
@@ -183,6 +192,9 @@ final class GismeteoApiClient {
     }
 
     static GismeteoWeatherData parse(String html, int[] current, String[] currentText) throws IOException {
+        if (html == null || html.trim().isEmpty()) {
+            throw new IOException("Пустой ответ Gismeteo");
+        }
         List<String> labels = new ArrayList<>();
         List<String> dates = new ArrayList<>();
         Matcher dateMatcher = ITEM_TEXT_P.matcher(section(html, "widget-row-tod-date"));
@@ -199,15 +211,20 @@ final class GismeteoApiClient {
         List<String[]> wind = windPairs(section(html, "data-row=\"wind\""));
 
         int dayCount = dates.size();
-        if (dayCount == 0 || temps.size() < dayCount) {
-            throw new IOException("Не удалось найти прогноз на странице");
+        if (dayCount == 0) {
+            throw new IOException("Не удалось найти даты прогноза на странице");
+        }
+        if (temps.isEmpty()) {
+            throw new IOException("Не удалось найти температуры на странице");
         }
         int slotsPerDay = Math.max(1, temps.size() / dayCount);
 
         List<GismeteoWeatherData.DayForecast> out = new ArrayList<>();
-        for (int i = 0; i < dayCount && i < 7; i++) {
+        LocalDate today = LocalDate.now();
+        for (int i = 0; i < dayCount && i < GismeteoWeatherData.MAX_DAYS; i++) {
             int from = i * slotsPerDay;
             int to = Math.min(from + slotsPerDay, temps.size());
+            if (to <= from) continue;
             Integer maxT = null;
             Integer minT = null;
             int[] slotTemps = new int[to - from];
@@ -220,7 +237,7 @@ final class GismeteoApiClient {
                 int v = temps.get(k);
                 slotTemps[idx] = v;
                 slotConds[idx] = k < icons.size() ? unescape(icons.get(k)[0]) : "";
-                slotWinds[idx] = k < wind.size() ? Integer.parseInt(wind.get(k)[0]) : 0;
+                slotWinds[idx] = k < wind.size() ? safeInt(wind.get(k)[0], 0) : 0;
                 slotDirs[idx] = k < wind.size() ? wind.get(k)[1] : "";
                 daySlotLabels[idx] = idx < slotLabels.size() ? unescape(slotLabels.get(idx)) : "";
                 if (maxT == null || v > maxT) maxT = v;
@@ -243,6 +260,7 @@ final class GismeteoApiClient {
                     windDir,
                     windSpeed,
                     condition.isEmpty() ? "\u2601\uFE0F" : GismeteoWeatherData.DayForecast.iconEmojiForCondition(condition),
+                    GismeteoWeatherData.fullDateForParse(dates.get(i), today),
                     slotTemps,
                     slotConds,
                     slotWinds,
@@ -250,9 +268,20 @@ final class GismeteoApiClient {
                     daySlotLabels
             ));
         }
+        if (out.isEmpty()) {
+            throw new IOException("Не удалось разобрать ни одного дня прогноза");
+        }
         return new GismeteoWeatherData(out, System.currentTimeMillis(),
                 current[0], current[1], current[2], current[3], current[4],
                 currentText[1], currentText[0], currentText[2]);
+    }
+
+    private static int safeInt(String raw, int fallback) {
+        try {
+            return Integer.parseInt(raw.trim());
+        } catch (RuntimeException e) {
+            return fallback;
+        }
     }
 
     private static List<String[]> iconPairs(String sec) {
@@ -317,7 +346,12 @@ final class GismeteoApiClient {
             }
         }
         String month = m >= 0 ? String.format("%02d", m + 1) : parts[1];
-        return parts[0] + "." + month;
+        String day = parts[0].trim();
+        try {
+            day = String.format("%02d", Integer.parseInt(day));
+        } catch (RuntimeException e) {
+        }
+        return day + "." + month;
     }
 
     private static String unescape(String text) {
@@ -331,6 +365,8 @@ final class GismeteoApiClient {
                 .replace("&gt;", ">")
                 .trim();
     }
+
+    private static final int MAX_BODY_CHARS = 3000000;
 
     private static String readAll(InputStream stream) throws IOException {
         if (stream == null) {

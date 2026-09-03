@@ -4,8 +4,11 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 
 // Модель прогноза Gismeteo: агрегаты по дням + детали по полусуткам + текущая погода.
@@ -78,6 +81,108 @@ final class GismeteoWeatherData {
         return json.toString();
     }
 
+    static final int MAX_DAYS = 7;
+
+    GismeteoWeatherData mergePrevious(GismeteoWeatherData prev) {
+        LocalDate today = LocalDate.now();
+        Map<String, DayForecast> byDate = new LinkedHashMap<>();
+        if (prev != null && prev.days != null) {
+            for (DayForecast d : prev.days) {
+                if (d != null && d.date != null && !d.date.isEmpty() && !byDate.containsKey(d.date)) {
+                    byDate.put(d.date, d);
+                }
+            }
+        }
+        for (DayForecast d : days) {
+            if (d != null && d.date != null && !d.date.isEmpty()) {
+                byDate.put(d.date, d);
+            }
+        }
+        List<DayForecast> dated = new ArrayList<>();
+        for (DayForecast d : byDate.values()) {
+            if (resolveFullDate(d, today) != null) {
+                dated.add(d);
+            }
+        }
+        dated.sort((a, b) -> resolveFullDate(a, today).compareTo(resolveFullDate(b, today)));
+        List<DayForecast> out = new ArrayList<>();
+        for (DayForecast d : dated) {
+            if (out.size() >= MAX_DAYS) break;
+            out.add(d);
+        }
+        int curTemp = currentTemp;
+        int curFeels = feelsLike;
+        int curHum = humidity;
+        int curPress = pressureMm;
+        int curWind = windSpeedNow;
+        String curWindDir = windDirNow;
+        String curCond = conditionNow;
+        String curIcon = iconNow;
+        if (prev != null && curTemp == DayForecast.NO_VALUE) {
+            curTemp = prev.currentTemp;
+            curFeels = prev.feelsLike;
+            curHum = prev.humidity;
+            curPress = prev.pressureMm;
+            curWind = prev.windSpeedNow;
+            curWindDir = prev.windDirNow;
+            curCond = prev.conditionNow;
+            curIcon = prev.iconNow;
+        }
+        return new GismeteoWeatherData(out, updatedAtMillis,
+                curTemp, curFeels, curHum, curPress, curWind, curWindDir, curCond, curIcon);
+    }
+
+    static LocalDate resolveFullDate(DayForecast d, LocalDate today) {
+        if (d == null) return null;
+        if (d.fullDate != null && !d.fullDate.trim().isEmpty()) {
+            try {
+                LocalDate parsed = LocalDate.parse(d.fullDate.trim());
+                return parsed.isBefore(today) ? null : parsed;
+            } catch (RuntimeException ignored) {
+            }
+        }
+        int[] dm = parseShortDate(d.date);
+        if (dm == null) return null;
+        LocalDate cand;
+        try {
+            cand = LocalDate.of(today.getYear(), dm[1], dm[0]);
+        } catch (RuntimeException e) {
+            return null;
+        }
+        if (!cand.isBefore(today)) return cand;
+        LocalDate rolled = cand.plusYears(1);
+        if (!rolled.isAfter(today.plusDays(10))) return rolled;
+        return null;
+    }
+
+    static String fullDateForParse(String shortDate, LocalDate today) {
+        int[] dm = parseShortDate(shortDate);
+        if (dm == null) return "";
+        LocalDate cand;
+        try {
+            cand = LocalDate.of(today.getYear(), dm[1], dm[0]);
+        } catch (RuntimeException e) {
+            return "";
+        }
+        if (cand.isBefore(today)) cand = cand.plusYears(1);
+        return cand.toString();
+    }
+
+    private static int[] parseShortDate(String shortDate) {
+        if (shortDate == null) return null;
+        String s = shortDate.trim();
+        int dot = s.indexOf(46);
+        if (dot <= 0 || dot + 1 >= s.length()) return null;
+        try {
+            int day = Integer.parseInt(s.substring(0, dot).trim());
+            int month = Integer.parseInt(s.substring(dot + 1).trim());
+            if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+            return new int[]{day, month};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     // Поиск дня прогноза по строке "dd.MM"
     DayForecast dayByDate(String shortDate) {
         for (DayForecast day : days) {
@@ -104,11 +209,12 @@ final class GismeteoWeatherData {
         final String[] slotConditions;
         final int[] slotWinds;
         final String[] slotWindDirs;
+        final String fullDate;
         final String[] slotLabels;
 
         DayForecast(String dayLabel, String date, int tempMin, int tempMax,
                     String condition, String windDir, int windSpeed, String iconEmoji,
-                    int[] slotTemps, String[] slotConditions, int[] slotWinds,
+                    String fullDate, int[] slotTemps, String[] slotConditions, int[] slotWinds,
                     String[] slotWindDirs, String[] slotLabels) {
             this.dayLabel = dayLabel == null ? "" : dayLabel;
             this.date = date == null ? "" : date;
@@ -117,6 +223,7 @@ final class GismeteoWeatherData {
             this.condition = condition == null ? "" : condition;
             this.windDir = windDir == null ? "" : windDir;
             this.windSpeed = windSpeed;
+            this.fullDate = fullDate == null ? "" : fullDate;
             this.iconEmoji = iconEmoji == null || iconEmoji.isEmpty()
                     ? iconEmojiForCondition(condition) : iconEmoji;
             this.slotTemps = slotTemps == null ? new int[0] : slotTemps;
@@ -136,6 +243,7 @@ final class GismeteoWeatherData {
                     json.optString("windDir", ""),
                     json.optInt("windSpeed", 0),
                     json.optString("iconEmoji", ""),
+                    json.optString("fullDate", ""),
                     intArray(json, "slotTemps"),
                     stringArray(json, "slotConditions"),
                     intArray(json, "slotWinds"),
@@ -164,6 +272,7 @@ final class GismeteoWeatherData {
             JSONObject json = new JSONObject();
             json.put("dayLabel", dayLabel);
             json.put("date", date);
+            json.put("fullDate", fullDate);
             json.put("tempMin", tempMin);
             json.put("tempMax", tempMax);
             json.put("condition", condition);
