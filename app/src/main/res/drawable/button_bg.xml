@@ -1,9 +1,7 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
+<?xml version="1.0" encoding="utf-8"?>
+<shape
+  xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/schedule_accent" />
-    <corners android:radius="10dp" />
-    <padding
-        android:bottom="12dp"
-        android:left="18dp"
-        android:right="18dp"
-        android:top="12dp" />
+    <corners android:radius="10.0dip" />
+    <padding android:left="18.0dip" android:top="12.0dip" android:right="18.0dip" android:bottom="12.0dip" />
 </shape>

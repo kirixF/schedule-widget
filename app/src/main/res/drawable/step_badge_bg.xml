@@ -1,4 +1,6 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
-    <solid android:color="@color/schedule_accent_soft" />
-    <corners android:radius="999dp" />
+<?xml version="1.0" encoding="utf-8"?>
+<shape
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="?scheduleAccentSoft" />
+    <corners android:radius="999.0dip" />
 </shape>

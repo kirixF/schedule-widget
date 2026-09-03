@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace = "com.kirix.schedule"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.kirix.schedule"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 9
-        versionName = "1.8"
+        targetSdk = 36
+        versionCode = 12
+        versionName = "2.4-weather"
     }
 
     signingConfigs {
@@ -20,6 +20,8 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
@@ -34,8 +36,16 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

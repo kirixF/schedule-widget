@@ -27,11 +27,22 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="com.kirix.schedule.ACTION_REFRESH" />
+                <action android:name="com.kirix.schedule.ACTION_SELECT_DAY" />
+                <action android:name="com.kirix.schedule.ACTION_SHIFT_WEEK" />
+                <action android:name="com.kirix.schedule.ACTION_TOGGLE_QR" />
+                <action android:name="com.kirix.schedule.ACTION_TOGGLE_WEATHER" />
+                <action android:name="com.kirix.schedule.ACTION_LAUNCH_TETRIS" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/schedule_widget_info" />
         </receiver>
+
+        <activity
+            android:name=".TetrisActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/AppTheme" />
 
         <service
             android:name=".ScheduleUpdateJobService"

@@ -9,131 +9,15 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.concurrent.atomic.AtomicBoolean;
-
+// Резервный парсер расписания через скрытый WebView, если API недоступно (только для групп).
 final class ScheduleWebParser {
     private static final String SCHEDULE_URL = "https://rasp.ural-campus.ru/schedule?org=college";
     private static final long TIMEOUT_MS = 45_000L;
-
-    interface Callback {
-        void onSuccess(ScheduleData data, String rawJson);
-
-        void onError(String message);
-    }
-
-    private ScheduleWebParser() {
-    }
-
-    static void fetchToday(Context context, String group, Callback callback) {
-        Handler handler = new Handler(Looper.getMainLooper());
-        handler.post(() -> new ParserSession(context.getApplicationContext(), group, callback).start());
-    }
-
-    private static final class ParserSession {
-        private final Context context;
-        private final String group;
-        private final Callback callback;
-        private final Handler handler = new Handler(Looper.getMainLooper());
-        private final AtomicBoolean finished = new AtomicBoolean(false);
-        private WebView webView;
-        private boolean injected;
-
-        private final Runnable timeout = () -> fail("Таймаут загрузки расписания");
-
-        ParserSession(Context context, String group, Callback callback) {
-            this.context = context;
-            this.group = group;
-            this.callback = callback;
-        }
-
-        @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
-        void start() {
-            try {
-                webView = new WebView(context);
-                WebSettings settings = webView.getSettings();
-                settings.setJavaScriptEnabled(true);
-                settings.setDomStorageEnabled(true);
-                settings.setBlockNetworkImage(true);
-                settings.setLoadsImagesAutomatically(false);
-                webView.addJavascriptInterface(new Bridge(this), "ScheduleBridge");
-                webView.setWebViewClient(new WebViewClient() {
-                    @Override
-                    public void onPageFinished(WebView view, String url) {
-                        if (!injected) {
-                            injected = true;
-                            view.evaluateJavascript(buildScript(group), null);
-                        }
-                    }
-                });
-                handler.postDelayed(timeout, TIMEOUT_MS);
-                webView.loadUrl(SCHEDULE_URL);
-            } catch (Throwable error) {
-                fail("Не удалось запустить скрытый браузер: " + error.getMessage());
-            }
-        }
-
-        void success(String rawJson) {
-            handler.post(() -> {
-                if (!finished.compareAndSet(false, true)) {
-                    return;
-                }
-                try {
-                    ScheduleData data = ScheduleData.fromJson(rawJson);
-                    cleanup();
-                    callback.onSuccess(data, rawJson);
-                } catch (JSONException error) {
-                    cleanup();
-                    callback.onError("Ошибка разбора данных сайта");
-                }
-            });
-        }
-
-        void fail(String message) {
-            handler.post(() -> {
-                if (!finished.compareAndSet(false, true)) {
-                    return;
-                }
-                cleanup();
-                callback.onError(message == null || message.trim().isEmpty() ? "Не удалось получить расписание" : message);
-            });
-        }
-
-        private void cleanup() {
-            handler.removeCallbacks(timeout);
-            if (webView != null) {
-                webView.stopLoading();
-                webView.removeJavascriptInterface("ScheduleBridge");
-                webView.destroy();
-                webView = null;
-            }
-        }
-    }
-
-    static final class Bridge {
-        private final ParserSession session;
-
-        Bridge(ParserSession session) {
-            this.session = session;
-        }
-
-        @JavascriptInterface
-        public void onResult(String rawJson) {
-            session.success(rawJson);
-        }
-
-        @JavascriptInterface
-        public void onError(String message) {
-            session.fail(message);
-        }
-    }
-
-    private static String buildScript(String group) {
-        return SCRIPT.replace("__GROUP__", JSONObject.quote(group));
-    }
-
     private static final String SCRIPT = """
             (function () {
                 const GROUP = __GROUP__;
@@ -317,4 +201,121 @@ final class ScheduleWebParser {
                     .catch((error) => ScheduleBridge.onError(String(error && error.message ? error.message : error)));
             })();
             """;
+
+    interface Callback {
+        void onSuccess(ScheduleData data, String rawJson);
+
+        void onError(String message);
+    }
+
+    private ScheduleWebParser() {
+    }
+
+    static void fetchToday(Context context, String group, Callback callback) {
+        new Handler(Looper.getMainLooper()).post(() ->
+                new ParserSession(context.getApplicationContext(), group, callback).start());
+    }
+
+    private static String buildScript(String group) {
+        return SCRIPT.replace("__GROUP__", JSONObject.quote(group));
+    }
+
+    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
+    private static final class ParserSession {
+        private final Context context;
+        private final String group;
+        private final Callback callback;
+        private final Handler handler = new Handler(Looper.getMainLooper());
+        private final AtomicBoolean finished = new AtomicBoolean(false);
+        private WebView webView;
+        private boolean injected;
+
+        private final Runnable timeout = () -> fail("Таймаут загрузки расписания");
+
+        ParserSession(Context context, String group, Callback callback) {
+            this.context = context;
+            this.group = group;
+            this.callback = callback;
+        }
+
+        void start() {
+            try {
+                webView = new WebView(context);
+                WebSettings settings = webView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setDomStorageEnabled(true);
+                settings.setBlockNetworkImage(true);
+                settings.setLoadsImagesAutomatically(false);
+                webView.addJavascriptInterface(new Bridge(this), "ScheduleBridge");
+                webView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        if (!injected) {
+                            injected = true;
+                            view.evaluateJavascript(buildScript(group), null);
+                        }
+                    }
+                });
+                handler.postDelayed(timeout, TIMEOUT_MS);
+                webView.loadUrl(SCHEDULE_URL);
+            } catch (Throwable error) {
+                fail("Не удалось запустить скрытый браузер: " + error.getMessage());
+            }
+        }
+
+        void success(String rawJson) {
+            handler.post(() -> {
+                if (!finished.compareAndSet(false, true)) {
+                    return;
+                }
+                try {
+                    ScheduleData data = ScheduleData.fromJson(rawJson);
+                    cleanup();
+                    callback.onSuccess(data, rawJson);
+                } catch (JSONException e) {
+                    cleanup();
+                    callback.onError("Ошибка разбора данных сайта");
+                }
+            });
+        }
+
+        void fail(String message) {
+            handler.post(() -> {
+                if (!finished.compareAndSet(false, true)) {
+                    return;
+                }
+                cleanup();
+                callback.onError(message == null || message.trim().isEmpty()
+                        ? "Не удалось получить расписание" : message);
+            });
+        }
+
+        private void cleanup() {
+            handler.removeCallbacks(timeout);
+            if (webView != null) {
+                webView.stopLoading();
+                webView.removeJavascriptInterface("ScheduleBridge");
+                webView.destroy();
+                webView = null;
+            }
+        }
+    }
+
+    static final class Bridge {
+        private final ParserSession session;
+
+        Bridge(ParserSession session) {
+            this.session = session;
+        }
+
+        @JavascriptInterface
+        public void onResult(String rawJson) {
+            session.success(rawJson);
+        }
+
+        @JavascriptInterface
+        public void onError(String message) {
+            session.fail(message);
+        }
+    }
 }

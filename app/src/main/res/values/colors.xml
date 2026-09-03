@@ -1,9 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="schedule_bg">#F6F7FB</color>
-    <color name="schedule_panel">#FFFFFF</color>
-    <color name="schedule_text">#101828</color>
-    <color name="schedule_muted">#667085</color>
-    <color name="schedule_soft">#EAECF0</color>
-    <color name="schedule_accent">#1D4ED8</color>
-    <color name="schedule_accent_soft">#EAF1FF</color>
+    <color name="accent_emerald">#ff059669</color>
+    <color name="accent_emerald_soft">#20059669</color>
+    <color name="accent_indigo">#ff6366f1</color>
+    <color name="accent_indigo_soft">#206366f1</color>
+    <color name="accent_mint">#ff10b981</color>
+    <color name="accent_mint_soft">#2010b981</color>
+    <color name="accent_orange">#fff59e0b</color>
+    <color name="accent_orange_soft">#20f59e0b</color>
+    <color name="accent_red">#fff43f5e</color>
+    <color name="accent_red_soft">#20f43f5e</color>
+    <color name="schedule_accent">#ff6366f1</color>
+    <color name="schedule_accent_soft">#206366f1</color>
+    <color name="schedule_bg">#ff090d16</color>
+    <color name="schedule_muted">#ff94a3b8</color>
+    <color name="schedule_panel">#d90f172a</color>
+    <color name="schedule_soft">#ff1e293b</color>
+    <color name="schedule_text">#fff8fafc</color>
 </resources>

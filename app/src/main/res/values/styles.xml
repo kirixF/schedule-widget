@@ -1,9 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="AppThemeDefault" parent="@style/AppTheme.Dark.Indigo" />
+    <style name="AppTheme" parent="@style/AppThemeDefault" />
+    <style name="AppTheme.Dark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#ff090d16</item>
         <item name="android:fontFamily">sans</item>
+        <item name="android:navigationBarColor">#ff090d16</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="scheduleBg">#ff090d16</item>
+        <item name="scheduleMuted">#ff94a3b8</item>
+        <item name="schedulePanel">#ff1e293b</item>
+        <item name="scheduleSoft">#ff334155</item>
+        <item name="scheduleText">#fff8fafc</item>
+    </style>
+    <style name="AppTheme.Dark.Emerald" parent="@style/AppTheme.Dark">
+        <item name="android:colorAccent">#ff059669</item>
+        <item name="scheduleAccent">#ff059669</item>
+        <item name="scheduleAccentSoft">#20059669</item>
+    </style>
+    <style name="AppTheme.Dark.Indigo" parent="@style/AppTheme.Dark">
+        <item name="android:colorAccent">#ff6366f1</item>
+        <item name="scheduleAccent">#ff6366f1</item>
+        <item name="scheduleAccentSoft">#206366f1</item>
+    </style>
+    <style name="AppTheme.Dark.Mint" parent="@style/AppTheme.Dark">
+        <item name="android:colorAccent">#ff10b981</item>
+        <item name="scheduleAccent">#ff10b981</item>
+        <item name="scheduleAccentSoft">#2010b981</item>
+    </style>
+    <style name="AppTheme.Dark.Orange" parent="@style/AppTheme.Dark">
+        <item name="android:colorAccent">#fff59e0b</item>
+        <item name="scheduleAccent">#fff59e0b</item>
+        <item name="scheduleAccentSoft">#20f59e0b</item>
+    </style>
+    <style name="AppTheme.Dark.Red" parent="@style/AppTheme.Dark">
+        <item name="android:colorAccent">#fff43f5e</item>
+        <item name="scheduleAccent">#fff43f5e</item>
+        <item name="scheduleAccentSoft">#20f43f5e</item>
+    </style>
+    <style name="AppTheme.Light" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#fff8fafc</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:navigationBarColor">#fff8fafc</item>
         <item name="android:windowLightStatusBar">true</item>
-        <item name="android:navigationBarColor">#FFFFFF</item>
-        <item name="android:colorAccent">@color/schedule_accent</item>
-        <item name="android:windowBackground">@color/schedule_bg</item>
+        <item name="scheduleBg">#fff8fafc</item>
+        <item name="scheduleMuted">#ff667085</item>
+        <item name="schedulePanel">#ffffffff</item>
+        <item name="scheduleSoft">#ffe2e8f0</item>
+        <item name="scheduleText">#ff101828</item>
+    </style>
+    <style name="AppTheme.Light.Emerald" parent="@style/AppTheme.Light">
+        <item name="android:colorAccent">#ff059669</item>
+        <item name="scheduleAccent">#ff059669</item>
+        <item name="scheduleAccentSoft">#20059669</item>
+    </style>
+    <style name="AppTheme.Light.Indigo" parent="@style/AppTheme.Light">
+        <item name="android:colorAccent">#ff6366f1</item>
+        <item name="scheduleAccent">#ff6366f1</item>
+        <item name="scheduleAccentSoft">#206366f1</item>
+    </style>
+    <style name="AppTheme.Light.Mint" parent="@style/AppTheme.Light">
+        <item name="android:colorAccent">#ff10b981</item>
+        <item name="scheduleAccent">#ff10b981</item>
+        <item name="scheduleAccentSoft">#2010b981</item>
+    </style>
+    <style name="AppTheme.Light.Orange" parent="@style/AppTheme.Light">
+        <item name="android:colorAccent">#fff59e0b</item>
+        <item name="scheduleAccent">#fff59e0b</item>
+        <item name="scheduleAccentSoft">#20f59e0b</item>
+    </style>
+    <style name="AppTheme.Light.Red" parent="@style/AppTheme.Light">
+        <item name="android:colorAccent">#fff43f5e</item>
+        <item name="scheduleAccent">#fff43f5e</item>
+        <item name="scheduleAccentSoft">#20f43f5e</item>
     </style>
 </resources>

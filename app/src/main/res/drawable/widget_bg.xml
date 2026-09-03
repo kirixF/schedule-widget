@@ -1,9 +1,7 @@
-<shape xmlns:android="http://schemas.android.com/apk/res/android">
+<?xml version="1.0" encoding="utf-8"?>
+<shape
+  xmlns:android="http://schemas.android.com/apk/res/android">
     <solid android:color="@color/schedule_panel" />
-    <corners android:radius="14dp" />
-    <padding
-        android:bottom="12dp"
-        android:left="12dp"
-        android:right="12dp"
-        android:top="12dp" />
+    <corners android:radius="14.0dip" />
+    <padding android:left="12.0dip" android:top="12.0dip" android:right="12.0dip" android:bottom="12.0dip" />
 </shape>

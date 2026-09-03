@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="scheduleAccent" format="color" />
+    <attr name="scheduleAccentSoft" format="color" />
+    <attr name="scheduleBg" format="color" />
+    <attr name="scheduleMuted" format="color" />
+    <attr name="schedulePanel" format="color" />
+    <attr name="scheduleSoft" format="color" />
+    <attr name="scheduleText" format="color" />
+</resources>

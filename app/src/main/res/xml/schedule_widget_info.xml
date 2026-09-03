@@ -1,10 +1,3 @@
-<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/widget_name"
-    android:initialLayout="@layout/widget_schedule"
-    android:minWidth="250dp"
-    android:minHeight="170dp"
-    android:targetCellWidth="4"
-    android:targetCellHeight="3"
-    android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="1800000"
-    android:widgetCategory="home_screen" />
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider android:description="@string/widget_name" android:minWidth="250.0dip" android:minHeight="220.0dip" android:updatePeriodMillis="0" android:initialLayout="@layout/widget_schedule" android:resizeMode="horizontal|vertical" android:minResizeWidth="250.0dip" android:minResizeHeight="125.0dip" android:widgetCategory="home_screen" android:maxResizeWidth="500.0dip" android:maxResizeHeight="320.0dip" android:targetCellWidth="4" android:targetCellHeight="4"
+  xmlns:android="http://schemas.android.com/apk/res/android" />
