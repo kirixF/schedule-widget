@@ -11,6 +11,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -30,6 +31,7 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class MainActivity extends Activity {
+    private static final String TAG = "MainActivity";
     private static final int REQUEST_PICK_IMAGE = 1001;
     private static final Locale RU = Locale.forLanguageTag("ru");
     private static final DateTimeFormatter DAY_FORMAT = DateTimeFormatter.ofPattern("EEEE, dd.MM.yyyy", RU);
@@ -43,6 +45,8 @@ public final class MainActivity extends Activity {
     private RadioButton radioGroupType;
     private RadioButton radioTeacher;
     private LocalDate selectedDate = LocalDate.now();
+    private AlertDialog activeDialog;
+    private DatePickerDialog dateDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -100,9 +104,9 @@ public final class MainActivity extends Activity {
     private void updateInputHints() {
         TextView sectionHint = findViewById(R.id.sectionGroupHint);
         if (radioTeacher.isChecked()) {
-            groupInput.setHint("ФИО преподавателя");
+            groupInput.setHint(R.string.teacher_hint);
             if (sectionHint != null) {
-                sectionHint.setText("Введите фамилию или ФИО преподавателя так же, как на сайте. Например: Абилова.");
+                sectionHint.setText(R.string.teacher_section_hint);
             }
         } else {
             groupInput.setHint(R.string.group_hint);
@@ -110,6 +114,35 @@ public final class MainActivity extends Activity {
                 sectionHint.setText(R.string.section_group_hint);
             }
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        dismissDialogs();
+        super.onDestroy();
+    }
+
+    private void dismissDialogs() {
+        if (activeDialog != null) {
+            try {
+                activeDialog.dismiss();
+            } catch (Exception e) {
+                Log.w(TAG, "dialog dismiss failed", e);
+            }
+            activeDialog = null;
+        }
+        if (dateDialog != null) {
+            try {
+                dateDialog.dismiss();
+            } catch (Exception e) {
+                Log.w(TAG, "date dialog dismiss failed", e);
+            }
+            dateDialog = null;
+        }
+    }
+
+    private boolean canShowDialog() {
+        return !isFinishing() && !isDestroyed();
     }
 
     @Override
@@ -122,7 +155,7 @@ public final class MainActivity extends Activity {
         String group = groupInput.getText().toString().trim();
         boolean isTeacher = radioTeacher.isChecked();
         if (group.isEmpty()) {
-            statusText.setText(isTeacher ? "Введите ФИО преподавателя" : getString(R.string.status_enter_group));
+            statusText.setText(isTeacher ? getString(R.string.status_enter_teacher) : getString(R.string.status_enter_group));
             ScheduleWidgetProvider.showSetup(this);
             ScheduleUpdateJobService.cancelAll(this);
             return;
@@ -138,7 +171,7 @@ public final class MainActivity extends Activity {
     private void pickQrImage() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("image/*");
-        startActivityForResult(Intent.createChooser(intent, "Выберите QR-код"), REQUEST_PICK_IMAGE);
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.qr_pick_title)), REQUEST_PICK_IMAGE);
     }
 
     @Override
@@ -151,33 +184,25 @@ public final class MainActivity extends Activity {
     }
 
     private void saveQrCodeImage(Uri uri) {
-        InputStream is = null;
-        try {
-            is = getContentResolver().openInputStream(uri);
+        try (InputStream is = getContentResolver().openInputStream(uri)) {
             Bitmap bitmap = BitmapFactory.decodeStream(is);
             if (bitmap == null) {
-                statusText.setText("Не удалось загрузить изображение");
+                statusText.setText(R.string.qr_load_failed);
                 return;
             }
             Bitmap resized = resizeBitmap(bitmap, 512);
             File file = new File(getFilesDir(), "pass_qr.png");
-            FileOutputStream fos = new FileOutputStream(file);
-            resized.compress(Bitmap.CompressFormat.PNG, 100, fos);
-            fos.close();
+            try (FileOutputStream fos = new FileOutputStream(file)) {
+                resized.compress(Bitmap.CompressFormat.PNG, 100, fos);
+            }
             if (resized != bitmap) {
                 bitmap.recycle();
             }
             renderStatus();
             ScheduleWidgetProvider.showSelectedSchedule(this);
         } catch (Exception e) {
-            statusText.setText("Ошибка сохранения QR-кода: " + e.getMessage());
-        } finally {
-            if (is != null) {
-                try {
-                    is.close();
-                } catch (Exception ignored) {
-                }
-            }
+            Log.w(TAG, "QR save failed", e);
+            statusText.setText(getString(R.string.qr_save_error, String.valueOf(e.getMessage())));
         }
     }
 
@@ -208,6 +233,9 @@ public final class MainActivity extends Activity {
     }
 
     private void showCityPickerDialog(Button button) {
+        if (!canShowDialog()) {
+            return;
+        }
         // slug обязателен корректный; ID городов можно проверить на gismeteo.ru
         String[][] cities = {
                 {"Челябинск", "chelyabinsk-4565"},
@@ -226,8 +254,9 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < cities.length; i++) {
             names[i] = cities[i][0];
         }
-        new AlertDialog.Builder(this)
-                .setTitle("Город прогноза")
+        dismissDialogs();
+        activeDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.city_picker_title)
                 .setItems(names, (dialog, which) -> {
                     if (which == cities.length - 1) {
                         promptCustomCity(button);
@@ -235,47 +264,62 @@ public final class MainActivity extends Activity {
                         applyCity(button, cities[which][0], cities[which][1]);
                     }
                 })
+                .setOnDismissListener(d -> activeDialog = null)
                 .show();
     }
 
     private void promptCustomCity(Button button) {
+        if (!canShowDialog()) {
+            return;
+        }
         android.widget.EditText input = new android.widget.EditText(this);
-        input.setHint("https://www.gismeteo.ru/weather-city-1234/");
+        input.setHint(R.string.city_custom_hint);
         input.setTextSize(16f);
         android.widget.FrameLayout container = new android.widget.FrameLayout(this);
         container.setPadding(60, 20, 60, 0);
         container.addView(input);
-        new AlertDialog.Builder(this)
-                .setTitle("Ссылка на город Gismeteo")
-                .setMessage("Откройте gismeteo.ru, найдите город и вставьте сюда ссылку вида https://www.gismeteo.ru/weather-yekaterinburg-11120/")
+        dismissDialogs();
+        activeDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.city_custom_title)
+                .setMessage(R.string.city_custom_message)
                 .setView(container)
                 .setPositiveButton("OK", (dialog, which) -> {
                     String slug = GismeteoApiClient.extractSlug(input.getText().toString());
                     if (slug == null) {
-                        statusText.setText("Не удалось распознать ссылку. Нужна вида weather-city-1234");
+                        statusText.setText(R.string.city_link_error);
                         return;
                     }
                     String name = slug.substring(0, slug.lastIndexOf('-'));
                     name = name.substring(0, 1).toUpperCase(RU) + name.substring(1);
                     applyCity(button, name, slug);
                 })
-                .setNegativeButton("Отмена", null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setOnDismissListener(d -> activeDialog = null)
                 .show();
     }
 
     private void applyCity(Button button, String name, String slug) {
         SchedulePrefs.setCity(this, name, slug);
         updateCityButtonLabel(button);
-        statusText.setText("Город погоды: " + name + ". Обновляю прогноз…");
+        statusText.setText(getString(R.string.city_updated, name));
         ScheduleWidgetProvider.triggerWeatherRefresh(this);
     }
 
     private void setupDayPickerButton() {
         updateDayPickerLabel();
         dayPickerButton.setOnClickListener(view -> {
-            DatePickerDialog dialog = new DatePickerDialog(this,
+            if (!canShowDialog()) {
+                return;
+            }
+            dismissDialogs();
+            dateDialog = new DatePickerDialog(this,
                     (picker, year, month, dayOfMonth) -> {
-                        selectedDate = LocalDate.of(year, month + 1, dayOfMonth);
+                        try {
+                            selectedDate = LocalDate.of(year, month + 1, dayOfMonth);
+                        } catch (Exception e) {
+                            Log.w(TAG, "bad date from picker", e);
+                            return;
+                        }
                         SchedulePrefs.setSelectedDate(this, selectedDate);
                         updateDayPickerLabel();
                         renderStatus();
@@ -283,8 +327,10 @@ public final class MainActivity extends Activity {
                     selectedDate.getYear(),
                     selectedDate.getMonthValue() - 1,
                     selectedDate.getDayOfMonth());
-            dialog.getDatePicker().setMaxDate(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000);
-            dialog.show();
+            // Два учебных года вперед: нужен просмотр пар на следующий учебный год.
+            dateDialog.getDatePicker().setMaxDate(System.currentTimeMillis() + 730L * 24 * 60 * 60 * 1000);
+            dateDialog.setOnDismissListener(d -> dateDialog = null);
+            dateDialog.show();
         });
     }
 
@@ -314,6 +360,7 @@ public final class MainActivity extends Activity {
         try {
             archive = ScheduleArchiveStore.loadForCurrentGroup(this);
         } catch (Exception e) {
+            Log.w(TAG, "archive load failed", e);
             archive = null;
         }
         ScheduleData selectedSchedule = archive == null ? null : archive.getDay(selectedDate);
@@ -325,7 +372,7 @@ public final class MainActivity extends Activity {
             return;
         }
         String entityLabel = isTeacher
-                ? "Выбран преподаватель: " + group
+                ? getString(R.string.teacher_selected, group)
                 : getString(R.string.status_selected_group, group);
         StringBuilder text = new StringBuilder(entityLabel);
         text.append('\n').append(getString(R.string.status_selected_day, DAY_FORMAT.format(selectedDate)));

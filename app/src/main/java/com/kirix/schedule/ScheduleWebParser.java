@@ -1,9 +1,11 @@
 package com.kirix.schedule;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -15,8 +17,10 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 // Резервный парсер расписания через скрытый WebView, если API недоступно (только для групп).
+// Хрупкое решение: требует Activity-контекст, работает только из UI. Из сервисов не вызывать.
 final class ScheduleWebParser {
-    private static final String SCHEDULE_URL = "https://rasp.ural-campus.ru/schedule?org=college";
+    private static final String TAG = "ScheduleWebParser";
+    private static final String SCHEDULE_URL = AppConfig.SCHEDULE_SITE_URL;
     private static final long TIMEOUT_MS = 45_000L;
     private static final String SCRIPT = """
             (function () {
@@ -212,8 +216,23 @@ final class ScheduleWebParser {
     }
 
     static void fetchToday(Context context, String group, Callback callback) {
+        if (!(context instanceof Activity)) {
+            Log.w(TAG, "WebView fallback requires Activity context, got: "
+                    + (context == null ? "null" : context.getClass().getSimpleName()));
+            String msg = null;
+            try {
+                if (context != null) {
+                    msg = context.getString(R.string.error_webview_no_activity);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "getString failed", e);
+            }
+            callback.onError(msg != null ? msg : "Резервный браузер недоступен в фоне, используется только API");
+            return;
+        }
+        Activity activity = (Activity) context;
         new Handler(Looper.getMainLooper()).post(() ->
-                new ParserSession(context.getApplicationContext(), group, callback).start());
+                new ParserSession(activity, group, callback).start());
     }
 
     private static String buildScript(String group) {
@@ -230,7 +249,16 @@ final class ScheduleWebParser {
         private WebView webView;
         private boolean injected;
 
-        private final Runnable timeout = () -> fail("Таймаут загрузки расписания");
+        private final Runnable timeout = () -> fail(timeoutMessage());
+
+        private String timeoutMessage() {
+            try {
+                return context.getString(R.string.error_webview_timeout);
+            } catch (Exception e) {
+                Log.w(TAG, "getString failed", e);
+                return "Таймаут загрузки расписания";
+            }
+        }
 
         ParserSession(Context context, String group, Callback callback) {
             this.context = context;
@@ -240,6 +268,13 @@ final class ScheduleWebParser {
 
         void start() {
             try {
+                if (context instanceof Activity) {
+                    Activity act = (Activity) context;
+                    if (act.isFinishing() || act.isDestroyed()) {
+                        fail("Activity закрывается, браузер не запущен");
+                        return;
+                    }
+                }
                 webView = new WebView(context);
                 WebSettings settings = webView.getSettings();
                 settings.setJavaScriptEnabled(true);
@@ -293,9 +328,15 @@ final class ScheduleWebParser {
         private void cleanup() {
             handler.removeCallbacks(timeout);
             if (webView != null) {
-                webView.stopLoading();
-                webView.removeJavascriptInterface("ScheduleBridge");
-                webView.destroy();
+                try {
+                    webView.stopLoading();
+                    webView.loadUrl("about:blank");
+                    webView.removeJavascriptInterface("ScheduleBridge");
+                    webView.setWebViewClient(null);
+                    webView.destroy();
+                } catch (Exception e) {
+                    Log.w(TAG, "WebView cleanup failed", e);
+                }
                 webView = null;
             }
         }

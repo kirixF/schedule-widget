@@ -2,6 +2,7 @@ package com.kirix.schedule;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 
 import java.io.File;
 import java.time.LocalDate;
@@ -52,7 +53,8 @@ final class SchedulePrefs {
         prefs(context).edit().putString(KEY_LAST_JSON, rawJson).remove(KEY_LAST_ERROR).apply();
         try {
             ScheduleArchiveStore.saveDay(context, ScheduleData.fromJson(rawJson));
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w("SchedulePrefs", "saveDay failed", e);
         }
     }
 
@@ -75,7 +77,8 @@ final class SchedulePrefs {
         }
         try {
             return ScheduleData.fromJson(raw);
-        } catch (JSONException ignored) {
+        } catch (JSONException e) {
+            Log.w("SchedulePrefs", "legacy schedule parse failed", e);
             return null;
         }
     }
@@ -99,7 +102,8 @@ final class SchedulePrefs {
     // --- Прогноз погоды Gismeteo ---
 
     static String getCitySlug(Context context) {
-        return prefs(context).getString(KEY_CITY_SLUG, "chelyabinsk-4565");
+        String slug = prefs(context).getString(KEY_CITY_SLUG, null);
+        return (slug == null || slug.trim().isEmpty()) ? AppConfig.DEFAULT_CITY_SLUG : slug;
     }
 
     static void setCity(Context context, String name, String slug) {
@@ -112,7 +116,8 @@ final class SchedulePrefs {
     }
 
     static String getCityName(Context context) {
-        return prefs(context).getString(KEY_CITY_NAME, "Челябинск");
+        String name = prefs(context).getString(KEY_CITY_NAME, null);
+        return (name == null || name.trim().isEmpty()) ? AppConfig.DEFAULT_CITY_NAME : name;
     }
 
     static void setLastForecast(Context context, String rawJson) {
@@ -137,7 +142,8 @@ final class SchedulePrefs {
         }
         try {
             return GismeteoWeatherData.fromJson(raw);
-        } catch (JSONException ignored) {
+        } catch (JSONException e) {
+            Log.w("SchedulePrefs", "forecast parse failed", e);
             return null;
         }
     }

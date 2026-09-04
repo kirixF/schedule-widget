@@ -1,5 +1,8 @@
 package com.kirix.schedule;
 
+import android.os.Looper;
+import android.util.Log;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,14 +20,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /* loaded from: classes2.dex */
 final class ScheduleApiClient {
-    private static final String BASE_URL = "https://rasp.ural-campus.ru/api";
-    private static final String ORG = "college";
+    private static final String TAG = "ScheduleApiClient";
+    private static final String ORG = AppConfig.SCHEDULE_ORG;
     private static final DateTimeFormatter API_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy", Locale.ROOT);
     private static final DateTimeFormatter RESPONSE_DATE = DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT);
     private static final Locale RU = Locale.forLanguageTag("ru");
@@ -32,7 +38,63 @@ final class ScheduleApiClient {
     private ScheduleApiClient() {
     }
 
+    interface ScheduleCallback {
+        void onSuccess(ArchiveResult result);
+        void onError(Exception e);
+    }
+
+    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "schedule-api");
+        t.setDaemon(true);
+        return t;
+    });
+
+    // Безопасный вызов из UI: сеть уходит в фон, колбэк приходит туда же (без привязки к Looper).
+    static void fetchAllAsync(String groupQuery, boolean isTeacher, ScheduleCallback callback) {
+        EXECUTOR.execute(() -> {
+            try {
+                callback.onSuccess(fetchAll(groupQuery, isTeacher));
+            } catch (Exception e) {
+                callback.onError(e);
+            }
+        });
+    }
+
+    static void fetchTodayAsync(String groupQuery, boolean isTeacher, ScheduleCallback callback) {
+        EXECUTOR.execute(() -> {
+            try {
+                ArchiveResult all = fetchAll(groupQuery, isTeacher);
+                LocalDate today = LocalDate.now(ZoneId.systemDefault());
+                ScheduleData day = all.archive.getDay(today);
+                if (day == null) {
+                    day = ScheduleData.empty(groupQuery.trim(), isTeacher, today,
+                            today.getDayOfWeek().getDisplayName(TextStyle.FULL, RU),
+                            System.currentTimeMillis());
+                }
+                callback.onSuccess(new ArchiveResult(all.archive));
+            } catch (Exception e) {
+                callback.onError(e);
+            }
+        });
+    }
+
+    private static void assertWorkerThread() {
+        if (Looper.getMainLooper() != null && Looper.getMainLooper().isCurrentThread()) {
+            throw new IllegalStateException("ScheduleApiClient: сетевой вызов запрещен в UI-потоке, используйте fetchAllAsync");
+        }
+    }
+
+    // Кэш справочников: один HTTP-запрос на 24ч вместо запроса при каждом поиске.
+    private static final long DIRECTORY_TTL_MS = 24L * 60 * 60 * 1000;
+    private static volatile JSONArray cachedGroups;
+    private static volatile long cachedGroupsAt;
+    private static volatile JSONArray cachedTeachers;
+    private static volatile long cachedTeachersAt;
+    private static final Map<String, Group> GROUP_INDEX = new ConcurrentHashMap<>();
+    private static final Map<String, Teacher> TEACHER_INDEX = new ConcurrentHashMap<>();
+
     static Result fetchToday(String groupQuery, boolean isTeacher) throws JSONException, IOException {
+        assertWorkerThread();
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         ArchiveResult result = fetchRange(groupQuery, isTeacher, today, today, false);
         ScheduleData todaySchedule = result.archive.getDay(today);
@@ -43,6 +105,7 @@ final class ScheduleApiClient {
     }
 
     static ArchiveResult fetchAll(String groupQuery, boolean isTeacher) throws JSONException, IOException {
+        assertWorkerThread();
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         return fetchRange(groupQuery, isTeacher, today.minusDays(7L), today.plusYears(1L), true);
     }
@@ -61,13 +124,15 @@ final class ScheduleApiClient {
         if (isTeacher) {
             Teacher teacher = findTeacher(query);
             String name2 = teacher.name;
-            String url2 = "https://rasp.ural-campus.ru/api/schedule/college/teacher/" + teacher.guid + "?datebegin=" + API_DATE.format(dateBegin) + "&dateend=" + API_DATE.format(requestDateEnd);
+            String url2 = AppConfig.teacherScheduleUrl(teacher.guid,
+                    API_DATE.format(dateBegin), API_DATE.format(requestDateEnd));
             url = url2;
             name = name2;
         } else {
             Group group = findGroup(query);
             String name3 = group.name;
-            url = "https://rasp.ural-campus.ru/api/schedule/college/group/" + group.guid + "?datebegin=" + API_DATE.format(dateBegin) + "&dateend=" + API_DATE.format(requestDateEnd);
+            url = AppConfig.groupScheduleUrl(group.guid,
+                    API_DATE.format(dateBegin), API_DATE.format(requestDateEnd));
             name = name3;
         }
         JSONObject root = new JSONObject(get(url));
@@ -133,6 +198,7 @@ final class ScheduleApiClient {
         try {
             return LocalDate.parse(rawDate, RESPONSE_DATE);
         } catch (DateTimeParseException e) {
+            Log.w(TAG, "Bad date from API: " + rawDate, e);
             return null;
         }
     }
@@ -142,9 +208,13 @@ final class ScheduleApiClient {
     }
 
     private static Group findGroup(String query) throws JSONException, IOException {
-        JSONObject root = new JSONObject(get("https://rasp.ural-campus.ru/api/schedule/college/groups"));
-        JSONArray groups = extractArray(root, "groups");
-        String strNormalize = normalize(query);
+        String key = normalize(query);
+        Group cached = GROUP_INDEX.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        JSONArray groups = getCachedGroups();
+        String strNormalize = key;
         Group best = null;
         for (int i = 0; i < groups.length(); i++) {
             JSONObject item = groups.getJSONObject(i);
@@ -169,7 +239,9 @@ final class ScheduleApiClient {
                     }
                 }
                 if (strNormalize2.equals(strNormalize) || exactPart) {
-                    return new Group(guid, name);
+                    Group found = new Group(guid, name);
+                    GROUP_INDEX.put(key, found);
+                    return found;
                 }
                 if ((strNormalize2.contains(strNormalize) || strNormalize.contains(strNormalize2)) && (best == null || name.length() < best.name.length())) {
                     best = new Group(guid, name);
@@ -177,9 +249,39 @@ final class ScheduleApiClient {
             }
         }
         if (best != null) {
+            GROUP_INDEX.put(key, best);
             return best;
         }
         throw new IOException("Группа не найдена: " + query);
+    }
+
+    private static synchronized JSONArray getCachedGroups() throws JSONException, IOException {
+        long now = System.currentTimeMillis();
+        if (cachedGroups != null && now - cachedGroupsAt < DIRECTORY_TTL_MS) {
+            return cachedGroups;
+        }
+        JSONObject root = new JSONObject(get(AppConfig.groupsUrl()));
+        cachedGroups = extractArray(root, "groups");
+        cachedGroupsAt = now;
+        return cachedGroups;
+    }
+
+    private static synchronized JSONArray getCachedTeachers() throws JSONException, IOException {
+        long now = System.currentTimeMillis();
+        if (cachedTeachers != null && now - cachedTeachersAt < DIRECTORY_TTL_MS) {
+            return cachedTeachers;
+        }
+        JSONObject root = new JSONObject(get(AppConfig.teachersUrl()));
+        cachedTeachers = extractArray(root, "teachers");
+        cachedTeachersAt = now;
+        return cachedTeachers;
+    }
+
+    static void invalidateDirectoryCache() {
+        cachedGroups = null;
+        cachedTeachers = null;
+        GROUP_INDEX.clear();
+        TEACHER_INDEX.clear();
     }
 
     private static JSONObject mapLesson(JSONObject raw, int index) throws JSONException {
@@ -226,55 +328,58 @@ final class ScheduleApiClient {
     }
 
     private static String get(String url) throws IOException {
-        InputStream stream;
+        assertWorkerThread();
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(20000);
-        connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("User-Agent", "ScheduleWidget/2.0 Android");
-        int status = connection.getResponseCode();
-        if (status >= 200 && status < 300) {
-            stream = connection.getInputStream();
-        } else {
-            stream = connection.getErrorStream();
+        try {
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(20000);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("User-Agent", "ScheduleWidget/2.0 Android");
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 200 && status < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+            String body = readAll(stream);
+            if (status < 200 || status >= 300) {
+                throw new IOException("HTTP " + status + ": " + body);
+            }
+            return body;
+        } finally {
+            connection.disconnect();
         }
-        String body = readAll(stream);
-        connection.disconnect();
-        if (status < 200 || status >= 300) {
-            throw new IOException("HTTP " + status + ": " + body);
-        }
-        return body;
     }
+
+    private static final int MAX_JSON_CHARS = 2_000_000;
 
     private static String readAll(InputStream stream) throws IOException {
         if (stream == null) {
             return "";
         }
         StringBuilder body = new StringBuilder();
-        BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
-        while (true) {
-            try {
-                String line = reader.readLine();
-                if (line != null) {
-                    body.append(line);
-                } else {
-                    reader.close();
-                    return body.toString();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            char[] buf = new char[8192];
+            int n;
+            while ((n = reader.read(buf)) != -1) {
+                if (body.length() + n > MAX_JSON_CHARS) {
+                    throw new IOException("Ответ API слишком большой");
                 }
-            } catch (Throwable th) {
-                try {
-                    reader.close();
-                } catch (Throwable th2) {
-                    th.addSuppressed(th2);
-                }
-                throw th;
+                body.append(buf, 0, n);
             }
+            return body.toString();
         }
     }
 
     private static String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(RU).replace((char) 1105, (char) 1077).replace((char) 8211, '-').replace((char) 8212, '-').replace(" ", "");
+        if (value == null) {
+            return "";
+        }
+        // ё->е, длинное тире/короткое тире -> дефис.
+        return value.trim().toLowerCase(RU)
+                .replace('ё', 'е')
+                .replace('–', '-')
+                .replace('—', '-')
+                .replace(" ", "");
     }
 
     private static String trimSeconds(String value) {
@@ -282,8 +387,8 @@ final class ScheduleApiClient {
             return "";
         }
         String clean = value.trim();
-        int firstColon = clean.indexOf(58);
-        int lastColon = clean.lastIndexOf(58);
+        int firstColon = clean.indexOf(':');
+        int lastColon = clean.lastIndexOf(':');
         if (firstColon != lastColon && lastColon > 1 && clean.length() - lastColon == 3) {
             return clean.substring(0, lastColon);
         }
@@ -333,9 +438,13 @@ final class ScheduleApiClient {
     }
 
     private static Teacher findTeacher(String query) throws JSONException, IOException {
-        JSONObject root = new JSONObject(get("https://rasp.ural-campus.ru/api/schedule/college/teachers"));
-        JSONArray teachers = extractArray(root, "teachers");
-        String strNormalize = normalize(query);
+        String key = normalize(query);
+        Teacher cached = TEACHER_INDEX.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        JSONArray teachers = getCachedTeachers();
+        String strNormalize = key;
         Teacher best = null;
         for (int i = 0; i < teachers.length(); i++) {
             JSONObject item = teachers.getJSONObject(i);
@@ -360,7 +469,9 @@ final class ScheduleApiClient {
                     }
                 }
                 if (strNormalize2.equals(strNormalize) || exactPart) {
-                    return new Teacher(guid, name);
+                    Teacher found = new Teacher(guid, name);
+                    TEACHER_INDEX.put(key, found);
+                    return found;
                 }
                 if ((strNormalize2.contains(strNormalize) || strNormalize.contains(strNormalize2)) && (best == null || name.length() < best.name.length())) {
                     best = new Teacher(guid, name);
@@ -368,6 +479,7 @@ final class ScheduleApiClient {
             }
         }
         if (best != null) {
+            TEACHER_INDEX.put(key, best);
             return best;
         }
         throw new IOException("Преподаватель не найден: " + query);

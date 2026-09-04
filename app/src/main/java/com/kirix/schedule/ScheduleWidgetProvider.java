@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.RemoteViews;
 
@@ -23,6 +24,7 @@ import java.util.Date;
 import java.util.Locale;
 
 public final class ScheduleWidgetProvider extends AppWidgetProvider {
+    private static final String TAG = "ScheduleWidget";
     static final String ACTION_REFRESH = "com.kirix.schedule.ACTION_REFRESH";
     static final String ACTION_SELECT_DAY = "com.kirix.schedule.ACTION_SELECT_DAY";
     static final String ACTION_SHIFT_WEEK = "com.kirix.schedule.ACTION_SHIFT_WEEK";
@@ -111,7 +113,17 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(launch);
         } else if (ACTION_REFRESH.equals(action)) {
-            showSelectedSchedule(context);
+            // Индикация загрузки: если кэша на выбранный день нет, сразу показываем загрузку.
+            try {
+                if (ScheduleArchiveStore.getSchedule(context, SchedulePrefs.getWidgetSelectedDate(context)) == null) {
+                    showLoading(context);
+                } else {
+                    showSelectedSchedule(context);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "refresh check failed", e);
+                showSelectedSchedule(context);
+            }
             ScheduleUpdateJobService.scheduleNow(context);
         } else if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
@@ -161,7 +173,8 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         ScheduleData selectedSchedule = null;
         try {
             selectedSchedule = ScheduleArchiveStore.getSchedule(context, selectedDate);
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "getSchedule failed", e);
         }
         if (selectedSchedule != null) {
             showSchedule(context, selectedSchedule);
@@ -177,7 +190,8 @@ public final class ScheduleWidgetProvider extends AppWidgetProvider {
         ScheduleData last = null;
         try {
             last = ScheduleArchiveStore.getSchedule(context, SchedulePrefs.getWidgetSelectedDate(context));
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "showError: no cached schedule", e);
         }
         if (last != null) {
             updateSchedule(context, last, context.getString(R.string.widget_last_data_error));

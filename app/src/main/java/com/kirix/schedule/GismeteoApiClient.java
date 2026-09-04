@@ -3,6 +3,7 @@ package com.kirix.schedule;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -22,6 +23,9 @@ import java.util.regex.Pattern;
 // Парсер прогноза Gismeteo без WebView. Страница /3-days/ отдаёт агрегаты и полусутки
 // в серверном HTML, страница /now/ — текущую погоду (ощущается, влажность, давление).
 final class GismeteoApiClient {
+    private static final String TAG = "GismeteoApiClient";
+    // Лимит ответа: защита от OOM на слабых устройствах. Gismeteo 3-days обычно 300-600 КБ.
+    private static final int MAX_BODY_CHARS = 1_500_000;
     private static final Pattern CITY_SLUG_P = Pattern.compile("(?:weather-)?([a-z0-9]+(?:-[a-z0-9]+)*-\\d+)");
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "gismeteo-fetch");
@@ -87,47 +91,68 @@ final class GismeteoApiClient {
 
     // Блокирующий вызов для фоновых задач (JobService). Страница "сейчас" не критична.
     static GismeteoWeatherData fetchForecastSync(Context context) throws IOException {
-        GismeteoWeatherData data = fetchForecastSync(SchedulePrefs.getCitySlug(context));
+        assertWorkerThread();
+        String slug = SchedulePrefs.getCitySlug(context);
+        if (slug == null || slug.trim().isEmpty()) {
+            slug = AppConfig.DEFAULT_CITY_SLUG;
+        }
+        GismeteoWeatherData data = fetchForecastSync(slug);
         try {
             GismeteoWeatherData prev = SchedulePrefs.getLastForecast(context);
             if (prev != null) {
                 data = data.mergePrevious(prev);
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "mergePrevious failed", e);
         }
         return data;
     }
 
     static GismeteoWeatherData fetchForecastSync(String citySlug) throws IOException {
-        String forecastHtml = fetchHtml(forecastUrl(citySlug));
+        assertWorkerThread();
+        if (citySlug == null || citySlug.trim().isEmpty()) {
+            throw new IOException("Город погоды не указан");
+        }
+        String slug = citySlug.trim();
+        String forecastHtml = fetchHtml(forecastUrl(slug));
         int[] current = new int[]{-9999, -9999, -1, -1, -1}; // temp, feels, humidity, pressure, wind
         String[] currentText = new String[]{"", "", ""};      // condition, windDir, icon
         try {
-            parseNowPage(fetchHtml(nowUrl(citySlug)), current, currentText);
-        } catch (Exception ignored) {
+            parseNowPage(fetchHtml(nowUrl(slug)), current, currentText);
+        } catch (Exception e) {
             // Текущая погода не критична — прогноз остаётся валидным.
+            Log.w(TAG, "now-page parse failed, forecast still valid", e);
         }
-        GismeteoWeatherData data = parse(forecastHtml, current, currentText);
-        return data;
+        return parse(forecastHtml, current, currentText);
+    }
+
+    private static void assertWorkerThread() {
+        if (Looper.getMainLooper() != null && Looper.getMainLooper().isCurrentThread()) {
+            throw new IllegalStateException("GismeteoApiClient: сетевой вызов запрещен в UI-потоке");
+        }
     }
 
     private static String fetchHtml(String url) throws IOException {
+        assertWorkerThread();
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setConnectTimeout(10_000);
-        connection.setReadTimeout(15_000);
-        connection.setRequestProperty("User-Agent",
-                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36");
-        connection.setRequestProperty("Accept-Language", "ru,ru-RU;q=0.9");
-        int status = connection.getResponseCode();
-        InputStream stream = status >= 200 && status < 300
-                ? connection.getInputStream()
-                : connection.getErrorStream();
-        String body = readAll(stream);
-        connection.disconnect();
-        if (status < 200 || status >= 300) {
-            throw new IOException("Gismeteo HTTP " + status);
+        try {
+            connection.setConnectTimeout(10_000);
+            connection.setReadTimeout(15_000);
+            connection.setRequestProperty("User-Agent",
+                    "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36");
+            connection.setRequestProperty("Accept-Language", "ru,ru-RU;q=0.9");
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 200 && status < 300
+                    ? connection.getInputStream()
+                    : connection.getErrorStream();
+            String body = readAll(stream);
+            if (status < 200 || status >= 300) {
+                throw new IOException("Gismeteo HTTP " + status);
+            }
+            return body;
+        } finally {
+            connection.disconnect();
         }
-        return body;
     }
 
     private static void parseNowPage(String html, int[] values, String[] texts) {
@@ -176,9 +201,15 @@ final class GismeteoApiClient {
     }
 
     // Секция страницы от маркера до следующего блока widget-row / data-row.
+    // Парсинг зависит от верстки gismeteo.ru: при смене классов вернется "" и parse() бросит
+    // понятную ошибку вместо молчаливого пустого прогноза.
     private static String section(String html, String marker) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
         int start = html.indexOf(marker);
         if (start < 0) {
+            Log.w(TAG, "marker not found: " + marker);
             return "";
         }
         int from = start + marker.length();
@@ -212,9 +243,11 @@ final class GismeteoApiClient {
 
         int dayCount = dates.size();
         if (dayCount == 0) {
+            Log.w(TAG, "parse failed: no dates, html len=" + html.length());
             throw new IOException("Не удалось найти даты прогноза на странице");
         }
         if (temps.isEmpty()) {
+            Log.w(TAG, "parse failed: no temps, html len=" + html.length());
             throw new IOException("Не удалось найти температуры на странице");
         }
         int slotsPerDay = Math.max(1, temps.size() / dayCount);
@@ -316,7 +349,8 @@ final class GismeteoApiClient {
         while (m.find()) {
             try {
                 values.add(Integer.parseInt(m.group(1)));
-            } catch (NumberFormatException ignored) {
+            } catch (NumberFormatException e) {
+                Log.w(TAG, "bad int: " + m.group(1), e);
             }
         }
         return values;
@@ -350,6 +384,7 @@ final class GismeteoApiClient {
         try {
             day = String.format("%02d", Integer.parseInt(day));
         } catch (RuntimeException e) {
+            Log.w(TAG, "bad day: " + raw, e);
         }
         return day + "." + month;
     }
@@ -366,17 +401,19 @@ final class GismeteoApiClient {
                 .trim();
     }
 
-    private static final int MAX_BODY_CHARS = 3000000;
-
     private static String readAll(InputStream stream) throws IOException {
         if (stream == null) {
             return "";
         }
-        StringBuilder body = new StringBuilder();
+        StringBuilder body = new StringBuilder(256 * 1024);
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                body.append(line).append('\n');
+            char[] buf = new char[8192];
+            int n;
+            while ((n = reader.read(buf)) != -1) {
+                if (body.length() + n > MAX_BODY_CHARS) {
+                    throw new IOException("Ответ Gismeteo слишком большой, парсинг прерван");
+                }
+                body.append(buf, 0, n);
             }
         }
         return body.toString();

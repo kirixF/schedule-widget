@@ -2,6 +2,7 @@ package com.kirix.schedule;
 
 import android.content.Context;
 import android.util.AtomicFile;
+import android.util.Log;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -99,6 +100,7 @@ final class ScheduleArchiveStore {
             cacheFileLength = length;
             return archive;
         } catch (IOException | JSONException e) {
+            Log.w("ScheduleArchive", "load failed, trying legacy", e);
             ScheduleData legacy = SchedulePrefs.getLegacySchedule(context);
             if (legacy == null) {
                 return null;

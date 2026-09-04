@@ -171,7 +171,7 @@ final class GismeteoWeatherData {
     private static int[] parseShortDate(String shortDate) {
         if (shortDate == null) return null;
         String s = shortDate.trim();
-        int dot = s.indexOf(46);
+        int dot = s.indexOf('.');
         if (dot <= 0 || dot + 1 >= s.length()) return null;
         try {
             int day = Integer.parseInt(s.substring(0, dot).trim());

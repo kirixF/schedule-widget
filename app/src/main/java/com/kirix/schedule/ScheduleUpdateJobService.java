@@ -6,6 +6,7 @@ import android.app.job.JobScheduler;
 import android.app.job.JobService;
 import android.content.ComponentName;
 import android.content.Context;
+import android.util.Log;
 
 import java.time.Duration;
 import java.time.LocalDate;
@@ -14,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public final class ScheduleUpdateJobService extends JobService {
+    private static final String TAG = "ScheduleUpdate";
     private static final long DAILY_DEADLINE_WINDOW_MS = 15 * 60 * 1000L;
     private static final int JOB_NOW = 42100;
     private static final int JOB_DAILY = 42101;
@@ -37,7 +39,8 @@ public final class ScheduleUpdateJobService extends JobService {
         ScheduleData cachedSchedule = null;
         try {
             cachedSchedule = ScheduleArchiveStore.getSchedule(this, SchedulePrefs.getWidgetSelectedDate(this));
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            Log.w(TAG, "cache read failed", e);
         }
         if (cachedSchedule == null) {
             ScheduleWidgetProvider.showLoading(this);
@@ -53,29 +56,10 @@ public final class ScheduleUpdateJobService extends JobService {
                 fetchWeatherThenFinish(params);
             } catch (Exception apiError) {
                 String apiMessage = apiError.getMessage() == null ? "API сайта не ответил" : apiError.getMessage();
-                if (SchedulePrefs.isTeacher(this)) {
-                    SchedulePrefs.setLastError(this, apiMessage);
-                    fetchWeatherThenFinish(params);
-                } else {
-                    // Для групп пробуем резервный путь через WebView-парсер сайта.
-                    final String groupId = group;
-                    runOnUiThread(() -> ScheduleWebParser.fetchToday(ScheduleUpdateJobService.this, groupId,
-                            new ScheduleWebParser.Callback() {
-                                @Override
-                                public void onSuccess(ScheduleData data, String rawJson) {
-                                    SchedulePrefs.setLastSchedule(ScheduleUpdateJobService.this, rawJson);
-                                    fetchWeatherThenFinish(params);
-                                }
-
-                                @Override
-                                public void onError(String message) {
-                                    SchedulePrefs.setLastError(ScheduleUpdateJobService.this,
-                                            "API: " + apiMessage + "\nWebView: " +
-                                                    (message == null ? "нет ответа" : message));
-                                    fetchWeatherThenFinish(params);
-                                }
-                            }));
-                }
+                // WebView-парсер требует Activity-контекст и из JobService недоступен,
+                // поэтому в фоне используем только API + локальный кэш.
+                SchedulePrefs.setLastError(this, apiMessage);
+                fetchWeatherThenFinish(params);
             }
         });
         return true;
