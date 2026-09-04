@@ -2,12 +2,12 @@ package com.kirix.schedule;
 
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.View;
-import android.widget.Button;
 import android.widget.TextView;
 
 public final class TetrisActivity extends Activity {
@@ -25,6 +25,9 @@ public final class TetrisActivity extends Activity {
     private static final String KEY_NEXT_QUEUE = "next_queue";
     private static final String KEY_STATE = "state";
 
+    private static final String ICON_PAUSE = "❚❚";
+    private static final String ICON_PLAY = "▶";
+
     private TetrisGame game;
     private TetrisBoardView boardView;
     private TetrisNextQueueView queueView;
@@ -32,8 +35,9 @@ public final class TetrisActivity extends Activity {
     private TextView tvHighScore;
     private TextView tvLevel;
     private TextView tvLines;
-    private Button btnPause;
-    private Button btnRestart;
+    private TextView tvTitle;
+    private TextView btnPause;
+    private android.view.View btnMenu;
 
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
     private final Runnable tickRunnable = new Runnable() {
@@ -61,15 +65,19 @@ public final class TetrisActivity extends Activity {
         tvHighScore = findViewById(R.id.tvHighScore);
         tvLevel = findViewById(R.id.tvLevel);
         tvLines = findViewById(R.id.tvLines);
+        tvTitle = findViewById(R.id.tvTitle);
         btnPause = findViewById(R.id.btnPause);
-        btnRestart = findViewById(R.id.btnRestart);
+        btnMenu = findViewById(R.id.btnMenu);
+
+        applyTitleGradient();
 
         game = new TetrisGame();
         game.setListener(createListener());
         boardView.setGame(game);
 
         btnPause.setOnClickListener(v -> togglePause());
-        btnRestart.setOnClickListener(v -> restartGame());
+        btnMenu.setOnClickListener(v -> restartGame());
+        findViewById(R.id.btnRestart).setOnClickListener(v -> restartGame());
 
         findViewById(R.id.btnLeft).setOnClickListener(v -> game.moveLeft());
         findViewById(R.id.btnRight).setOnClickListener(v -> game.moveRight());
@@ -86,9 +94,20 @@ public final class TetrisActivity extends Activity {
             game.start();
         }
         updateAll();
-        if (game.isPaused()) {
-            btnPause.setText(R.string.tetris_continue);
-        }
+        refreshPauseIcon();
+    }
+
+    private void applyTitleGradient() {
+        tvTitle.post(() -> {
+            float w = tvTitle.getWidth();
+            if (w <= 0) return;
+            Shader shader = new LinearGradient(0, 0, w, 0,
+                    new int[]{0xFF22D3EE, 0xFF38BDF8, 0xFFA855F7},
+                    new float[]{0f, 0.5f, 1f},
+                    Shader.TileMode.CLAMP);
+            tvTitle.getPaint().setShader(shader);
+            tvTitle.invalidate();
+        });
     }
 
     @Override
@@ -136,18 +155,25 @@ public final class TetrisActivity extends Activity {
     private void togglePause() {
         if (game.isRunning()) {
             game.pause();
-            btnPause.setText(R.string.tetris_continue);
         } else if (game.isPaused()) {
             game.resume();
-            btnPause.setText(R.string.tetris_pause);
             startTimer();
+        }
+        refreshPauseIcon();
+    }
+
+    private void refreshPauseIcon() {
+        if (game != null && game.isPaused()) {
+            btnPause.setText(ICON_PLAY);
+        } else {
+            btnPause.setText(ICON_PAUSE);
         }
     }
 
     private void restartGame() {
         stopTimer();
         game.start();
-        btnPause.setText(R.string.tetris_pause);
+        refreshPauseIcon();
         updateAll();
     }
 
@@ -197,6 +223,7 @@ public final class TetrisActivity extends Activity {
                         saveHighScore(game.getScore());
                         tvHighScore.setText(String.valueOf(loadHighScore()));
                     }
+                    refreshPauseIcon();
                     boardView.invalidate();
                 });
             }
@@ -210,7 +237,7 @@ public final class TetrisActivity extends Activity {
             @Override
             public void onScoreChanged(int score, int level, int lines) {
                 runOnUiThread(() -> {
-                    tvScore.setText(String.valueOf(score));
+                    tvScore.setText(formatScore(score));
                     tvLevel.setText(String.valueOf(level));
                     tvLines.setText(String.valueOf(lines));
                 });
@@ -221,10 +248,23 @@ public final class TetrisActivity extends Activity {
     private void updateAll() {
         boardView.invalidate();
         queueView.setQueue(game.getNextQueue());
-        tvScore.setText(String.valueOf(game.getScore()));
+        tvScore.setText(formatScore(game.getScore()));
         tvLevel.setText(String.valueOf(game.getLevel()));
         tvLines.setText(String.valueOf(game.getTotalLines()));
         boardView.post(() -> startTimer());
+    }
+
+    static String formatScore(int score) {
+        if (score < 1000) return String.valueOf(score);
+        StringBuilder sb = new StringBuilder();
+        String s = String.valueOf(score);
+        int first = s.length() % 3;
+        if (first == 0) first = 3;
+        sb.append(s, 0, first);
+        for (int i = first; i < s.length(); i += 3) {
+            sb.append(' ').append(s, i, i + 3);
+        }
+        return sb.toString();
     }
 
     private void startTimer() {
@@ -265,7 +305,7 @@ public final class TetrisActivity extends Activity {
         stopTimer();
         if (game.isRunning()) {
             game.pause();
-            btnPause.setText(R.string.tetris_continue);
+            refreshPauseIcon();
         }
     }
 

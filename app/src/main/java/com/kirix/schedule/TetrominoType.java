@@ -65,14 +65,27 @@ final class TetrominoType {
 
     static int colorForType(int type) {
         switch (type) {
-            case I: return 0xFF00BCD4;
-            case O: return 0xFFFFEB3B;
-            case T: return 0xFF9C27B0;
-            case S: return 0xFF4CAF50;
-            case Z: return 0xFFF44336;
-            case J: return 0xFF2196F3;
-            case L: return 0xFFFF9800;
+            case I: return 0xFF22D3EE;
+            case O: return 0xFFFACC15;
+            case T: return 0xFFA855F7;
+            case S: return 0xFF4ADE80;
+            case Z: return 0xFFEF4444;
+            case J: return 0xFF3B82F6;
+            case L: return 0xFFFB923C;
             default: return 0xFF808080;
+        }
+    }
+
+    static int darkForType(int type) {
+        switch (type) {
+            case I: return 0xFF0E7490;
+            case O: return 0xFFA16207;
+            case T: return 0xFF7E22CE;
+            case S: return 0xFF15803D;
+            case Z: return 0xFFB91C1C;
+            case J: return 0xFF1D4ED8;
+            case L: return 0xFFC2410C;
+            default: return 0xFF525252;
         }
     }
 }

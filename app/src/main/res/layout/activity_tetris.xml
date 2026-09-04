@@ -2,169 +2,69 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#ff090d16"
+    android:background="#ff060b18"
     android:orientation="vertical"
-    android:padding="8dp">
+    android:padding="12dp">
 
+    <!-- Top bar: menu | TETRIS | pause -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="48dp"
         android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp">
+        android:orientation="horizontal">
 
         <TextView
+            android:id="@+id/btnMenu"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/tetris_icon_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_new_game"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="&#9776;"
+            android:textColor="#fff8fafc"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/tvTitle"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/tetris_title"
-            android:textColor="#fff8fafc"
-            android:textSize="18sp"
+            android:gravity="center"
+            android:letterSpacing="0.15"
+            android:text="TETRIS"
+            android:textColor="#ff22d3ee"
+            android:textSize="26sp"
             android:textStyle="bold" />
 
-        <Button
+        <TextView
             android:id="@+id/btnPause"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:background="@drawable/secondary_button_bg"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/tetris_pause"
-            android:textAllCaps="false"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/tetris_icon_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_pause"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="&#10074;&#10074;"
             android:textColor="#fff8fafc"
-            android:textSize="13sp" />
-
-        <Button
-            android:id="@+id/btnRestart"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginStart="6dp"
-            android:background="@drawable/secondary_button_bg"
-            android:minWidth="0dp"
-            android:minHeight="0dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="@string/tetris_new_game"
-            android:textAllCaps="false"
-            android:textColor="#fff8fafc"
-            android:textSize="13sp" />
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="4dp"
-        android:paddingEnd="4dp">
+    <!-- Hidden restart action, kept for state compat (menu triggers restart) -->
+    <Button
+        android:id="@+id/btnRestart"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone" />
 
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/tetris_score"
-                android:textColor="#ff94a3b8"
-                android:textSize="11sp" />
-
-            <TextView
-                android:id="@+id/tvScore"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textColor="#fff8fafc"
-                android:textSize="24sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/tetris_best"
-                    android:textColor="#ff94a3b8"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tvHighScore"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textColor="#fff8fafc"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/tetris_level"
-                    android:textColor="#ff94a3b8"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tvLevel"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="1"
-                    android:textColor="#fff8fafc"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/tetris_lines"
-                    android:textColor="#ff94a3b8"
-                    android:textSize="10sp" />
-
-                <TextView
-                    android:id="@+id/tvLines"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textColor="#fff8fafc"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
-    </LinearLayout>
-
+    <!-- Board + side panel -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="10dp"
         android:layout_weight="1"
         android:orientation="horizontal">
 
@@ -175,111 +75,247 @@
             android:layout_weight="1" />
 
         <LinearLayout
-            android:layout_width="72dp"
+            android:layout_width="106dp"
             android:layout_height="match_parent"
-            android:layout_marginStart="8dp"
-            android:gravity="center_horizontal"
+            android:layout_marginStart="10dp"
+            android:orientation="vertical">
+
+            <!-- NEXT panel -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="@drawable/tetris_panel_bg"
+                android:orientation="vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:text="NEXT"
+                    android:textColor="#ff8b98ad"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <com.kirix.schedule.TetrisNextQueueView
+                    android:id="@+id/nextQueueView"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <!-- Score panel -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/tetris_panel_bg"
+                android:orientation="vertical"
+                android:padding="10dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SCORE"
+                    android:textColor="#ff8b98ad"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/tvScore"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="#fff8fafc"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="LINES"
+                    android:textColor="#ff8b98ad"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/tvLines"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0"
+                    android:textColor="#fff8fafc"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="LEVEL"
+                    android:textColor="#ff8b98ad"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/tvLevel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="1"
+                    android:textColor="#fff8fafc"
+                    android:textSize="19sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvHighScore"
+                    android:layout_width="0dp"
+                    android:layout_height="0dp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Controls -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="78dp"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/btnLeft"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/tetris_control_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_left_desc"
+            android:focusable="true"
+            android:gravity="center"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/tetris_next"
-                android:textColor="#ff94a3b8"
-                android:textSize="11sp" />
-
-            <com.kirix.schedule.TetrisNextQueueView
-                android:id="@+id/nextQueueView"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="4dp"
-                android:layout_weight="1" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:orientation="vertical">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnLeft"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/secondary_button_bg"
-                android:contentDescription="@string/tetris_left_desc"
                 android:text="&#8592;"
-                android:textAllCaps="false"
-                android:textColor="#fff8fafc"
-                android:textSize="26sp" />
-
-            <Button
-                android:id="@+id/btnRotate"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_marginStart="3dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/secondary_button_bg"
-                android:contentDescription="@string/tetris_rotate_desc"
-                android:text="@string/tetris_rotate"
-                android:textAllCaps="false"
-                android:textColor="#fff8fafc"
-                android:textSize="15sp" />
-
-            <Button
-                android:id="@+id/btnRight"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_marginStart="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/secondary_button_bg"
-                android:contentDescription="@string/tetris_right_desc"
-                android:text="&#8594;"
-                android:textAllCaps="false"
                 android:textColor="#fff8fafc"
                 android:textSize="26sp" />
         </LinearLayout>
 
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:orientation="horizontal">
+            android:id="@+id/btnRight"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/tetris_control_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_right_desc"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/btnSoftDrop"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_marginEnd="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/secondary_button_bg"
-                android:contentDescription="@string/tetris_soft_drop_desc"
-                android:text="@string/tetris_soft_drop"
-                android:textAllCaps="false"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#8594;"
                 android:textColor="#fff8fafc"
-                android:textSize="15sp" />
+                android:textSize="26sp" />
+        </LinearLayout>
 
-            <Button
-                android:id="@+id/btnHardDrop"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_marginStart="3dp"
-                android:layout_weight="2"
-                android:background="@drawable/secondary_button_bg"
-                android:contentDescription="@string/tetris_hard_drop_desc"
-                android:text="@string/tetris_hard_drop"
-                android:textAllCaps="false"
+        <LinearLayout
+            android:id="@+id/btnRotate"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/tetris_control_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_rotate_desc"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#8635;"
                 android:textColor="#fff8fafc"
-                android:textSize="15sp" />
+                android:textSize="24sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="ПОВОРОТ"
+                android:textColor="#ff8b98ad"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnSoftDrop"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/tetris_control_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_soft_drop_desc"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#8595;"
+                android:textColor="#fff8fafc"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="ПАДЕНИЕ"
+                android:textColor="#ff8b98ad"
+                android:textSize="9sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnHardDrop"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1.15"
+            android:background="@drawable/tetris_drop_btn_bg"
+            android:clickable="true"
+            android:contentDescription="@string/tetris_hard_drop_desc"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="&#8744;"
+                android:textColor="#ffffffff"
+                android:textSize="24sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="СБРОС"
+                android:textColor="#ffffffff"
+                android:textSize="9sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
